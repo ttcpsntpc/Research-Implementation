@@ -16,6 +16,7 @@
 #include "camera.h"
 #include "read_file.h"
 #include "UIManager.h"
+#include "distance_field_3D.h"
 
 #include <iostream>
 #include <string>
@@ -50,6 +51,7 @@ float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
 VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
+DistanceField3D distance_field;
 UIManager UI;
 
 int main()

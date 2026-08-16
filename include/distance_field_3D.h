@@ -1,0 +1,68 @@
+#ifndef DISTANCE_FIELD_3D_H
+#define DISTANCE_FIELD_3D_H
+
+#include <iostream>
+#include <vector>
+#include <tuple>
+using namespace std;
+
+/*
+注意：
+    模型自己用tuple定義，且希望直接能以現實位置定義，範圍固定從 0 to width/height，若width != height，函式內判斷須修改
+
+說明：
+    可以直接用這個類別計算模型的距離場，並分辨模型內外部，距離值為負代表在外部，為正則代表在內部
+
+宣告：
+    DistanceField3D name(width, height, depth);
+計算距離場：
+    name.compute(tuple<int, int, int> points);
+    需要給他<vector>中tuple<int, int, int>的list，代表模型所在位置
+可使用數值：
+    getDistance(int x, int y, int z)可以得到該位置的距離值
+    getMaxDistance()可以得到距離場中最大的距離值
+*/
+
+enum VoxelState {
+    INITIAL, DONE, CLOSE, FAR
+};
+
+struct Close {
+    double distance; // 存CLOSE voxel的距離
+    int index[3]; // 存close_distance_list對應voxel_distance的index
+    Close *next = nullptr;
+};
+
+class DistanceField3D {
+public:
+    DistanceField3D(int width, int height, int depth); 
+    DistanceField3D() {};
+    ~DistanceField3D() {};
+
+    // main function to compute distance field
+    void compute(const vector<std::tuple<int, int, int>>& points); // 可忽略，初步測試用
+    void compute(const vector<unsigned char>& voxels, int width, int height, int depth);
+
+    double getDistance(int x, int y, int z);
+    
+    double getMaxDistance() { return max_distance; }
+
+private:
+    int width, height, depth; 
+    double max_distance;
+
+    vector<double> voxel_distance;
+    vector<VoxelState> voxel_state;
+    Close *close_list_header = nullptr;
+
+    int offsets[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
+
+    bool isRangeValid(int i, int j, int k);
+    void insertList(int i, int j, int k, double distance);
+    double computeDistance(int i, int j, int k);
+    bool isClose(int i, int j, int k);
+    int idx(int i, int j, int k) { return i + j * width + k * width * height; }
+    void determineInOut();
+};
+
+#endif

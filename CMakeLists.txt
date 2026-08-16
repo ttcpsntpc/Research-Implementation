@@ -17,6 +17,7 @@ target_sources( Practice PRIVATE
     "src/vertex.cpp"
     "src/UIManager.cpp"
     "src/read_file.cpp"
+    "src/distance_field_3D.cpp"
 )
 
 target_include_directories( Practice PRIVATE
