@@ -630,7 +630,7 @@ void triangle2voxel(VolumeData &voxels, glm::vec3 v[3]) {
         for (int j = min_j; j <= max_j; ++j) {
             for (int i = min_i; i <= max_i; ++i) {
                 // 已經判斷過是模型了
-                // if(voxels(i, j, k) == 255) continue;
+                if(voxels(i, j, k) == 255) continue;
 
                 // 計算當前 Voxel 的中心點座標
                 glm::vec3 center;
