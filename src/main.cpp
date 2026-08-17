@@ -50,7 +50,7 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadStlFile("../../raw/teapot_ASCII.stl");
+VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
 DistanceField3D distance_field;
 UIManager UI;
 
@@ -185,11 +185,11 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, cube.size);
         
         // 畫模型的三角片
-        // glBindVertexArray(Object_tri.VAO_);
-        // model = glm::mat4(1.0f);
-        // model = glm::scale(model, glm::vec3(10.0f, 10.0f, 10.0f));
-        // light_shader.setMat4("model", model);
-        // glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
+        glBindVertexArray(Object_tri.VAO_);
+        model = glm::mat4(1.0f);
+        model = glm::scale(model, glm::vec3(10.0f, 10.0f, 10.0f));
+        light_shader.setMat4("model", model);
+        glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
 
 
         // active shader for background
@@ -199,10 +199,10 @@ int main()
         light_shader.setMat4("projection", projection);
         
         // 畫Voxels
-        glBindVertexArray(instance_cube.VAO_);
-        model = glm::mat4(1.0f);
-        light_shader.setMat4("model", model);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
+        // glBindVertexArray(instance_cube.VAO_);
+        // model = glm::mat4(1.0f);
+        // light_shader.setMat4("model", model);
+        // glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
 
         // draw the light
         glBindVertexArray(light_cube.VAO_);
