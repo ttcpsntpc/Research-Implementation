@@ -27,9 +27,19 @@ enum VoxelState {
     INITIAL, DONE, CLOSE, FAR
 };
 
-struct Close {
+struct PQNode { // for priority queue
+    int i, j, k;
+    double distance;
+    
+    // 為了讓 Priority Queue 變成 Min-Heap (由小排到大)，需重載大於運算子
+    bool operator>(const PQNode& other) const {
+        return distance > other.distance;
+    }
+};
+
+struct Close { // for linked list
+    int i, j, k; // 存close_distance_list對應voxel_distance的index
     double distance; // 存CLOSE voxel的距離
-    int index[3]; // 存close_distance_list對應voxel_distance的index
     Close *next = nullptr;
 };
 
@@ -40,8 +50,9 @@ public:
     ~DistanceField3D() {};
 
     // main function to compute distance field
-    void compute(const vector<std::tuple<int, int, int>>& points); // 可忽略，初步測試用
-    void compute(const vector<unsigned char>& voxels, int width, int height, int depth);
+    void compute_LL(const vector<std::tuple<int, int, int>>& points); // 可忽略，初步測試用
+    void compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth); // 用linked list計算距離場
+    void compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth); // 用priority queue計算距離場
 
     double getDistance(int x, int y, int z);
     
@@ -53,12 +64,11 @@ private:
 
     vector<double> voxel_distance;
     vector<VoxelState> voxel_state;
-    Close *close_list_header = nullptr;
 
     int offsets[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
 
     bool isRangeValid(int i, int j, int k);
-    void insertList(int i, int j, int k, double distance);
+    void insertList(int i, int j, int k, double distance, Close *&close_list_header); // for LL
     double computeDistance(int i, int j, int k);
     bool isClose(int i, int j, int k);
     int idx(int i, int j, int k) { return i + j * width + k * width * height; }
