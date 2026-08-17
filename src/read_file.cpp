@@ -601,23 +601,23 @@ TxtData ReadTxtFile(const char *txt_filename)
 }
 
 // SAT: 看看三角片跟六面體投影到哪個軸會不相交
-void triangle2voxel(VolumeData &vol, glm::vec3 v[3]) {
+void triangle2voxel(VolumeData &voxels, glm::vec3 v[3]) {
     // 計算一個三角片的最大最小值
     glm::vec3 tri_min = glm::min(v[0], glm::min(v[1], v[2]));
     glm::vec3 tri_max = glm::max(v[0], glm::max(v[1], v[2]));
 
-    glm::vec3 v_size(vol.voxel_size[0], vol.voxel_size[1], vol.voxel_size[2]); // 一個體素多長
+    glm::vec3 v_size(voxels.voxel_size[0], voxels.voxel_size[1], voxels.voxel_size[2]); // 一個體素多長
     
     glm::vec3 h = v_size * 0.5f; // 半個體素多長
 
     // 將 Bounding Box 轉換成 Grid 的 Index 範圍 (並做邊界裁切)
-    int min_i = std::max(0, static_cast<int>((tri_min.x - vol.min.x) / v_size.x - 0.5f));
-    int min_j = std::max(0, static_cast<int>((tri_min.y - vol.min.y) / v_size.y - 0.5f));
-    int min_k = std::max(0, static_cast<int>((tri_min.z - vol.min.z) / v_size.z - 0.5f));
+    int min_i = std::max(0, static_cast<int>((tri_min.x - voxels.min.x) / v_size.x - 0.5f));
+    int min_j = std::max(0, static_cast<int>((tri_min.y - voxels.min.y) / v_size.y - 0.5f));
+    int min_k = std::max(0, static_cast<int>((tri_min.z - voxels.min.z) / v_size.z - 0.5f));
 
-    int max_i = std::min(vol.resolution[0] - 1, static_cast<int>((tri_max.x - vol.min.x) / v_size.x + 0.5f));
-    int max_j = std::min(vol.resolution[1] - 1, static_cast<int>((tri_max.y - vol.min.y) / v_size.y + 0.5f));
-    int max_k = std::min(vol.resolution[2] - 1, static_cast<int>((tri_max.z - vol.min.z) / v_size.z + 0.5f));
+    int max_i = std::min(voxels.resolution[0] - 1, static_cast<int>((tri_max.x - voxels.min.x) / v_size.x + 0.5f));
+    int max_j = std::min(voxels.resolution[1] - 1, static_cast<int>((tri_max.y - voxels.min.y) / v_size.y + 0.5f));
+    int max_k = std::min(voxels.resolution[2] - 1, static_cast<int>((tri_max.z - voxels.min.z) / v_size.z + 0.5f));
 
     // 輔助 Lambda 函式：用於 SAT 的一維投影測試 (可被編譯器完美 inline)
     // 如果分離 (Separated) 則回傳 true
@@ -629,12 +629,14 @@ void triangle2voxel(VolumeData &vol, glm::vec3 v[3]) {
     for (int k = min_k; k <= max_k; ++k) {
         for (int j = min_j; j <= max_j; ++j) {
             for (int i = min_i; i <= max_i; ++i) {
-                
+                // 已經判斷過是模型了
+                // if(voxels(i, j, k) == 255) continue;
+
                 // 計算當前 Voxel 的中心點座標
                 glm::vec3 center;
-                center.x = vol.min.x + (i + 0.5f) * v_size.x;
-                center.y = vol.min.y + (j + 0.5f) * v_size.y;
-                center.z = vol.min.z + (k + 0.5f) * v_size.z;
+                center.x = voxels.min.x + (i + 0.5f) * v_size.x;
+                center.y = voxels.min.y + (j + 0.5f) * v_size.y;
+                center.z = voxels.min.z + (k + 0.5f) * v_size.z;
 
                 // 將三角片的三個頂點平移，使 Voxel 中心成為原點 (0,0,0)
                 glm::vec3 p0 = v[0] - center;
@@ -681,7 +683,7 @@ void triangle2voxel(VolumeData &vol, glm::vec3 v[3]) {
                 if (std::abs(glm::dot(normal, p0)) > r) continue; 
 
                 //  13 條軸測試全數通過！判定為相交
-                vol(i, j, k) = 255; 
+                voxels(i, j, k) = 255; 
             }
         }
     }
