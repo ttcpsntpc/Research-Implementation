@@ -32,7 +32,7 @@ vec3 PhongShading(vec3 gradient,vec3 color){
     vec3 ambient = Ka * Ia;
 
     vec3 N = normalize(gradient);
-    vec3 L = normalize(lightPos - FragPos);
+    vec3 L = normalize(viewPos - FragPos);
     vec3 diffuse = Kd * Id * max(dot(N, L), 0.0);
 
     vec3 V = normalize(viewPos - FragPos);

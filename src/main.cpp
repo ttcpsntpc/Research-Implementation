@@ -50,8 +50,8 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
-DistanceField3D distance_field;
+VolumeData volume_data = ReadStlFile("../../raw/Stanford dragon.stl");
+DistanceField3D df;
 UIManager UI;
 
 int main()
@@ -133,7 +133,11 @@ int main()
     cout<<"Model voxel size: "<<cube_pos.size()<<endl;
     instance_cube.AddInstance(cube_pos);
 
+    // df.compute_PQ(volume_data.voxel_data, volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]);
+
     UI.init();
+
+    int scaling_factor = 512/max(volume_data.max.x - volume_data.min.x, max(volume_data.max.y - volume_data.min.y, volume_data.max.z - volume_data.min.z)); // 顯示時統一縮放到一定範圍
 
     // render loop
     // -----------
@@ -185,20 +189,20 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, cube.size);
         
         // 畫模型的三角片
-        glBindVertexArray(Object_tri.VAO_);
-        model = glm::mat4(1.0f);
-        model = glm::scale(model, glm::vec3(50.0f, 50.0f, 50.0f));
-        model = glm::translate(model, -volume_data.min);
-        light_shader.setMat4("model", model);
-        glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
+        // glBindVertexArray(Object_tri.VAO_);
+        // model = glm::mat4(1.0f); 
+        // model = glm::scale(model, glm::vec3(scaling_factor, scaling_factor, scaling_factor));
+        // model = glm::translate(model, -volume_data.min);
+        // light_shader.setMat4("model", model);
+        // glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
 
         // 畫Voxels
-        // glBindVertexArray(instance_cube.VAO_);
-        // model = glm::mat4(1.0f);
-        // model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
-        // model = glm::scale(model, glm::vec3(50.0f, 50.0f, 50.0f));
-        // light_shader.setMat4("model", model);
-        // glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
+        glBindVertexArray(instance_cube.VAO_);
+        model = glm::mat4(1.0f);
+        model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+        model = glm::scale(model, glm::vec3(scaling_factor, scaling_factor, scaling_factor));
+        light_shader.setMat4("model", model);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
 
 
         // active shader for background
