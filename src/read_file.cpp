@@ -611,13 +611,13 @@ void triangle2voxel(VolumeData &vol, glm::vec3 v[3]) {
     glm::vec3 h = v_size * 0.5f; // 半個體素多長
 
     // 將 Bounding Box 轉換成 Grid 的 Index 範圍 (並做邊界裁切)
-    int min_i = std::max(0, static_cast<int>((tri_min.x - vol.min.x) / v_size.x));
-    int min_j = std::max(0, static_cast<int>((tri_min.y - vol.min.y) / v_size.y));
-    int min_k = std::max(0, static_cast<int>((tri_min.z - vol.min.z) / v_size.z));
+    int min_i = std::max(0, static_cast<int>((tri_min.x - vol.min.x) / v_size.x - 0.5f));
+    int min_j = std::max(0, static_cast<int>((tri_min.y - vol.min.y) / v_size.y - 0.5f));
+    int min_k = std::max(0, static_cast<int>((tri_min.z - vol.min.z) / v_size.z - 0.5f));
 
-    int max_i = std::min(vol.resolution[0] - 1, static_cast<int>((tri_max.x - vol.min.x) / v_size.x));
-    int max_j = std::min(vol.resolution[1] - 1, static_cast<int>((tri_max.y - vol.min.y) / v_size.y));
-    int max_k = std::min(vol.resolution[2] - 1, static_cast<int>((tri_max.z - vol.min.z) / v_size.z));
+    int max_i = std::min(vol.resolution[0] - 1, static_cast<int>((tri_max.x - vol.min.x) / v_size.x + 0.5f));
+    int max_j = std::min(vol.resolution[1] - 1, static_cast<int>((tri_max.y - vol.min.y) / v_size.y + 0.5f));
+    int max_k = std::min(vol.resolution[2] - 1, static_cast<int>((tri_max.z - vol.min.z) / v_size.z + 0.5f));
 
     // 輔助 Lambda 函式：用於 SAT 的一維投影測試 (可被編譯器完美 inline)
     // 如果分離 (Separated) 則回傳 true

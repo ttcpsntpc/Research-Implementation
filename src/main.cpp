@@ -50,7 +50,7 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadStlFile("../../raw/Stanford dragon.stl");
+VolumeData volume_data = ReadStlFile("../../raw/short_vase.stl");
 DistanceField3D df;
 UIManager UI;
 
