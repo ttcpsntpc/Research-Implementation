@@ -123,7 +123,7 @@ int main()
     Object_tri.CreateObject(vertices_tri, {});
 
     Object_c instance_cube;
-    instance_cube.CreateObject(vertices[2], {});
+    instance_cube.CreateObject(vertices[5], {});
     vector<glm::vec3> cube_pos;
     for(int i=0; i<256; i++)
         for(int j=0; j<256; j++)
@@ -187,9 +187,18 @@ int main()
         // 畫模型的三角片
         glBindVertexArray(Object_tri.VAO_);
         model = glm::mat4(1.0f);
-        model = glm::scale(model, glm::vec3(10.0f, 10.0f, 10.0f));
+        model = glm::scale(model, glm::vec3(50.0f, 50.0f, 50.0f));
+        model = glm::translate(model, -volume_data.min);
         light_shader.setMat4("model", model);
         glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
+
+        // 畫Voxels
+        // glBindVertexArray(instance_cube.VAO_);
+        // model = glm::mat4(1.0f);
+        // model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+        // model = glm::scale(model, glm::vec3(50.0f, 50.0f, 50.0f));
+        // light_shader.setMat4("model", model);
+        // glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
 
 
         // active shader for background
@@ -197,12 +206,6 @@ int main()
         light_shader.setVec3("lightPos", lightPos);
         light_shader.setMat4("view", view);
         light_shader.setMat4("projection", projection);
-        
-        // 畫Voxels
-        // glBindVertexArray(instance_cube.VAO_);
-        // model = glm::mat4(1.0f);
-        // light_shader.setMat4("model", model);
-        // glDrawArraysInstanced(GL_TRIANGLES, 0, instance_cube.size, cube_pos.size()); 
 
         // draw the light
         glBindVertexArray(light_cube.VAO_);
