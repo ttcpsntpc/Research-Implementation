@@ -688,7 +688,7 @@ void triangle2voxel(VolumeData &vol, glm::vec3 v[3]) {
 }
 
 // 可簡單判斷STL檔案格式是binary或ASCII
-VolumeData ReadSTLFile(const char *stl_filename) {
+VolumeData ReadStlFile(const char *stl_filename) {
     VolumeData stl_data;
     
     auto start = steady_clock::now();
@@ -775,6 +775,13 @@ VolumeData ReadSTLFile(const char *stl_filename) {
             ifs.seekg(2, ios::cur);
 
             triangle2voxel(stl_data, vertex);
+
+            glm::vec3 d0 = vertex[1] - vertex[0];
+            glm::vec3 d1 = vertex[2] - vertex[1];
+            glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
+            for(int i = 0; i < 3; i++) {
+                vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+            }
         }
     } else {
         string token;
@@ -796,6 +803,13 @@ VolumeData ReadSTLFile(const char *stl_filename) {
                     ifs >> vertex[i].x >> vertex[i].y >> vertex[i].z;
                 }
                 triangle2voxel(stl_data, vertex);
+                
+                glm::vec3 d0 = vertex[1] - vertex[0];
+                glm::vec3 d1 = vertex[2] - vertex[1];
+                glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
+                for(int i = 0; i < 3; i++) {
+                    vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+                }
             }
         }
     }
@@ -872,6 +886,13 @@ VolumeData ReadObjFile(const char *stl_filename) {
                 vertex[i] = vertices[idx];
             }
             triangle2voxel(obj_data, vertex);
+            
+            glm::vec3 d0 = vertex[1] - vertex[0];
+            glm::vec3 d1 = vertex[2] - vertex[1];
+            glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
+            for(int i = 0; i < 3; i++) {
+                vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+            }
         }
     }
 
