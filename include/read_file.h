@@ -12,7 +12,7 @@
 #include "vertex.h"
 using namespace std;
 
-#define RESOLUTION 256 // 預設regular grid大小
+#define RESOLUTION 64 // 預設regular grid大小
 
 inline vector<Vertex_c> vertices_tri; // 儲存STL/OBJ模型的原始三角片
 
