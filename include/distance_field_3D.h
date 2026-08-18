@@ -78,7 +78,7 @@ private:
 
     bool isRangeValid(int i, int j, int k);
     void insertList(int i, int j, int k, double distance, Close_LL *&close_list_header); // for LL
-    double computeDistance(int i, int j, int k);
+    double computeDistance(DistanceFieldData &df_data, int i, int j, int k);
     bool isClose(int i, int j, int k);
     int idx(int i, int j, int k) { return i + j * width + k * width * height; }
     void determineInOut(vector<double> &voxel_distance);
