@@ -6,9 +6,11 @@ in vec3 TexCoord;
 in vec3 Normal;
 in vec3 FragPos;
 
+uniform float opacity;
+
 // function prototypes
 vec3 PhongShading(vec3 gradient,vec3 color);
 
 void main(){
-    FragColor = vec4(ourColor, 1.0f);
+    FragColor = vec4(ourColor, opacity);
 }

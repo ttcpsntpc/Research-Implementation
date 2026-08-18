@@ -50,7 +50,7 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
+VolumeData volume_data = ReadObjFile("../../raw/bunny.obj");
 DistanceField3D DF;
 UIManager UI;
 
@@ -105,6 +105,8 @@ int main()
     // configure global opengl state
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     Shader_c shader("shader/shader.vs", "shader/shader.fs");
     Shader_c light_shader("shader/light_shader.vs", "shader/light_shader.fs");
 
@@ -248,6 +250,7 @@ int main()
         light_shader.setVec3("lightPos", lightPos);
         light_shader.setMat4("view", view);
         light_shader.setMat4("projection", projection);
+        light_shader.setFloat("opacity", 1.0f);
 
         // draw the light
         glBindVertexArray(light_cube.VAO_);
@@ -263,7 +266,26 @@ int main()
         model = glm::scale(model, glm::vec3(100, 100, 100));
         light_shader.setMat4("model", model);
         glDrawArrays(GL_LINES, 0, axis.size);
-
+        
+        // 畫 bounding box
+        glDepthMask(GL_FALSE); 
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+        light_shader.setFloat("opacity", 0.5f);
+        glBindVertexArray(cube.VAO_);
+        model = glm::mat4(1.0f);
+        model = glm::scale(model, glm::vec3(volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]));
+        model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+        model = glm::scale(model, ratio);
+        light_shader.setMat4("model", model);
+        glDrawArrays(GL_TRIANGLES, 0, cube.size);
+        glCullFace(GL_BACK);
+        light_shader.setFloat("opacity", 0.2f);
+        glDrawArrays(GL_TRIANGLES, 0, cube.size);
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_TRUE);
+        
         // ImGui render
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
