@@ -10,8 +10,14 @@ bool DistanceField3D::isRangeValid(int i, int j, int k) {
     return (i >= 0 && i < width && j >= 0 && j < height && k >= 0 && k < depth);
 }
 
-DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points, int width, int height, int depth) {
-    DistanceFieldData df_data;
+double DistanceField3D::getDistance(int i, int j, int k) {
+    if(isRangeValid(i, j, k)) {
+        return voxel_distance[idx(i, j, k)];
+    }
+    return DBL_MAX; // if invalid, return max double
+}
+
+void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
     Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
@@ -114,8 +120,7 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>
     return df_data;
 }
 
-DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
-    DistanceFieldData df_data;
+void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
     Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
