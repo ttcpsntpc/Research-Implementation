@@ -750,12 +750,12 @@ VolumeData ReadStlFile(const char *stl_filename) {
         }
     }
     
-    // 算總三角片範圍、邊界 (邊緣各預留1個單位)
+    // 算總三角片範圍、邊界 (邊緣各預留2個單位)
     glm::vec3 range = stl_data.max - stl_data.min;
     for(int i = 0; i < 3; i++)
-        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 2);
-    stl_data.min -= stl_data.voxel_size;
-    stl_data.max += stl_data.voxel_size;
+        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 4);
+    stl_data.min -= stl_data.voxel_size * glm::vec3(2, 2, 2);
+    stl_data.max += stl_data.voxel_size * glm::vec3(2, 2, 2);
     stl_data.size = stl_data.resolution[0] * stl_data.resolution[1] * stl_data.resolution[2];
     stl_data.voxel_data.resize(stl_data.size, 0);
 
@@ -861,9 +861,9 @@ VolumeData ReadObjFile(const char *stl_filename) {
 
     glm::vec3 range = obj_data.max - obj_data.min;
     for(int i = 0; i < 3; i++)
-        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 2);
-    obj_data.min -= obj_data.voxel_size;
-    obj_data.max += obj_data.voxel_size;
+        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 4);
+    obj_data.min -= obj_data.voxel_size * glm::vec3(2, 2, 2);
+    obj_data.max += obj_data.voxel_size * glm::vec3(2, 2, 2);
     obj_data.size = obj_data.resolution[0] * obj_data.resolution[1] * obj_data.resolution[2];
     obj_data.voxel_data.resize(obj_data.size, 0);
 
