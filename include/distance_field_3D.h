@@ -27,20 +27,20 @@ enum VoxelState {
     INITIAL, DONE, CLOSE, FAR
 };
 
-struct PQNode { // for priority queue
+struct Close_PQ { // for priority queue
     int i, j, k;
     double distance;
     
     // 為了讓 Priority Queue 變成 Min-Heap (由小排到大)，需重載大於運算子
-    bool operator>(const PQNode& other) const {
+    bool operator>(const Close_PQ& other) const {
         return distance > other.distance;
     }
 };
 
-struct Close { // for linked list
+struct Close_LL { // for linked list
     int i, j, k; // 存close_distance_list對應voxel_distance的index
     double distance; // 存CLOSE voxel的距離
-    Close *next = nullptr;
+    Close_LL *next = nullptr;
 };
 
 class DistanceField3D {
@@ -68,7 +68,7 @@ private:
     int offsets[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
 
     bool isRangeValid(int i, int j, int k);
-    void insertList(int i, int j, int k, double distance, Close *&close_list_header); // for LL
+    void insertList(int i, int j, int k, double distance, Close_LL *&close_list_header); // for LL
     double computeDistance(int i, int j, int k);
     bool isClose(int i, int j, int k);
     int idx(int i, int j, int k) { return i + j * width + k * width * height; }

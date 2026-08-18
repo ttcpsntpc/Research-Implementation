@@ -23,7 +23,7 @@ double DistanceField3D::getDistance(int i, int j, int k) {
 }
 
 void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
-    Close *close_list_header = nullptr;
+    Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
@@ -66,7 +66,7 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
     // Fast Marching Method 
     while(close_list_header != nullptr) {
         // choose closest in clos list, and make it DONE
-        Close *closest = close_list_header;
+        Close_LL *closest = close_list_header;
         close_list_header = close_list_header->next;
         int i = closest->i;
         int j = closest->j;
@@ -89,8 +89,8 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
                 if(new_distance < voxel_distance[idx(x, y, z)]) {
                     voxel_distance[idx(x, y, z)] = new_distance;
                     // remove old node
-                    Close *current = close_list_header;
-                    Close *previous = nullptr;
+                    Close_LL *current = close_list_header;
+                    Close_LL *previous = nullptr;
                     while(current->i != x || current->j != y || current->k != z) {
                         previous = current;
                         current = current->next;
@@ -120,7 +120,7 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
 }
 
 void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
-    Close *close_list_header = nullptr;
+    Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
@@ -169,7 +169,7 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
     // Fast Marching Method 
     while(close_list_header != nullptr) {
         // choose closest in close list, and make it DONE
-        Close *closest = close_list_header;
+        Close_LL *closest = close_list_header;
         close_list_header = close_list_header->next;
         int i = closest->i;
         int j = closest->j;
@@ -217,14 +217,14 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
     cout<<"最大距離值"<<max_distance<<endl;
 }
 
-void DistanceField3D::insertList(int i, int j, int k, double distance, Close *&close_list_header) {
-    Close *new_node = new Close{i, j, k, distance, nullptr};
+void DistanceField3D::insertList(int i, int j, int k, double distance, Close_LL *&close_list_header) {
+    Close_LL *new_node = new Close_LL{i, j, k, distance, nullptr};
     if(close_list_header == nullptr) {
         close_list_header = new_node;
         return;
     }
-    Close *current = close_list_header;
-    Close *previous = nullptr;
+    Close_LL *current = close_list_header;
+    Close_LL *previous = nullptr;
     while(current != nullptr && current->distance <= distance) {
         previous = current;
         current = current->next;
@@ -249,7 +249,7 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
     voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
-    priority_queue<PQNode, vector<PQNode>, greater<PQNode>> Close_heap;
+    priority_queue<Close_PQ, vector<Close_PQ>, greater<Close_PQ>> Close_heap;
 
     auto start = steady_clock::now();
 
@@ -289,7 +289,7 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
     // Fast Marching Method 
     while(!Close_heap.empty()) {
         // choose closest in close heap, and make it DONE
-        PQNode closest = Close_heap.top();
+        Close_PQ closest = Close_heap.top();
         Close_heap.pop();
 
         int i = closest.i;
