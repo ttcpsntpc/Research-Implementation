@@ -638,7 +638,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
     for(int i = 0; i < width; i++) {
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
-                if(voxel_out_count[idx(i, j, k)] >= 4) {
+                if(voxel_out_count[idx(i, j, k)] >= 3) {
                     voxel_distance[idx(i, j, k)] = -voxel_distance[idx(i, j, k)];
                 }
             }

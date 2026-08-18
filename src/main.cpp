@@ -50,7 +50,7 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadObjFile("../../raw/bunny.obj");
+VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
 DistanceField3D DF;
 UIManager UI;
 
@@ -172,7 +172,7 @@ int main()
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
         ImGui::Begin("GUI");
-        ImGui::SliderInt("showing distance", &distance_range, -df_data.max_distance, df_data.max_distance);
+        ImGui::SliderInt("showing distance", &distance_range, -(df_data.max_distance + 1), df_data.max_distance + 1);
         if(ImGui::Button("update voxels")) {
             vector<glm::vec3> cube_pos;
             for(int i = 0; i < df_data.width; i++)
