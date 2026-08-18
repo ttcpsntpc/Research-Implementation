@@ -23,56 +23,65 @@ using namespace std;
     getMaxDistance()可以得到距離場中最大的距離值
 */
 
+struct DistanceFieldData {
+    int width, height, depth; 
+    double max_distance;
+    
+    vector<double> voxel_distance;
+    
+    int idx(int i, int j, int k) const {
+        return k * width * height + j * width + i;
+    }
+    
+    inline double& operator()(int i, int j, int k) {
+        return voxel_distance[idx(i, j, k)];
+    }
+};
+
 enum VoxelState {
     INITIAL, DONE, CLOSE, FAR
 };
 
-struct PQNode { // for priority queue
+struct Close_PQ { // for priority queue
     int i, j, k;
     double distance;
     
     // 為了讓 Priority Queue 變成 Min-Heap (由小排到大)，需重載大於運算子
-    bool operator>(const PQNode& other) const {
+    bool operator>(const Close_PQ& other) const {
         return distance > other.distance;
     }
 };
 
-struct Close { // for linked list
+struct Close_LL { // for linked list
     int i, j, k; // 存close_distance_list對應voxel_distance的index
     double distance; // 存CLOSE voxel的距離
-    Close *next = nullptr;
+    Close_LL *next = nullptr;
 };
 
 class DistanceField3D {
 public:
-    DistanceField3D(int width, int height, int depth); 
     DistanceField3D() {};
     ~DistanceField3D() {};
 
     // main function to compute distance field
-    void compute_LL(const vector<std::tuple<int, int, int>>& points); // 可忽略，初步測試用
-    void compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth); // 用linked list計算距離場
-    void compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth); // 用priority queue計算距離場
-
-    double getDistance(int x, int y, int z);
-    
-    double getMaxDistance() { return max_distance; }
+    DistanceFieldData compute_LL(const vector<std::tuple<int, int, int>>& points, int width, int height, int depth); // 可忽略，初步測試用
+    DistanceFieldData compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth); // 用linked list計算距離場
+    DistanceFieldData compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth); // 用priority queue計算距離場
 
 private:
     int width, height, depth; 
     double max_distance;
-
-    vector<double> voxel_distance;
+    
     vector<VoxelState> voxel_state;
 
     int offsets[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
 
     bool isRangeValid(int i, int j, int k);
-    void insertList(int i, int j, int k, double distance, Close *&close_list_header); // for LL
-    double computeDistance(int i, int j, int k);
+    void insertList(int i, int j, int k, double distance, Close_LL *&close_list_header); // for LL
+    double computeDistance(DistanceFieldData &df_data, int i, int j, int k);
     bool isClose(int i, int j, int k);
     int idx(int i, int j, int k) { return i + j * width + k * width * height; }
-    void determineInOut();
+    void determineInOut(vector<double> &voxel_distance);
 };
 
 #endif

@@ -6,40 +6,32 @@
 
 using namespace chrono;
 
-DistanceField3D::DistanceField3D(int width, int height, int depth) : width(width), height(height), depth(depth), max_distance(0) {
-    voxel_distance.resize(width * height * depth);
-    voxel_state.resize(width * height * depth);
-}
-
 bool DistanceField3D::isRangeValid(int i, int j, int k) {
     return (i >= 0 && i < width && j >= 0 && j < height && k >= 0 && k < depth);
 }
 
-double DistanceField3D::getDistance(int i, int j, int k) {
-    if(isRangeValid(i, j, k)) {
-        return voxel_distance[idx(i, j, k)];
-    }
-    return DBL_MAX; // if invalid, return max double
-}
-
-void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
-    Close *close_list_header = nullptr;
+DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points, int width, int height, int depth) {
+    DistanceFieldData df_data;
+    Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
-    for(int i = 0; i < width; i++) {
-        for(int j = 0; j < height; j++) {
-            for(int k = 0; k < depth; k++) {
-                voxel_state[idx(i, j, k)] = INITIAL;
-            }
-        }
-    }
+    df_data.width = width;
+    df_data.height = height;
+    df_data.depth = depth;
+    this->width = width;
+    this->height = height;
+    this->depth = depth;
+
+    df_data.voxel_distance.resize(width * height * depth);
+    voxel_state.assign(width * height * depth, INITIAL);
+    
     // initialize model's voxel
     for(auto& p : points) {
         int x = get<0>(p);
         int y = get<1>(p);
         int z = get<2>(p);
-        voxel_distance[idx(x, y, z)] = 0;
+        df_data(x, y, z) = 0;
         voxel_state[idx(x, y, z)] = DONE;
     }
     // initialize other voxel
@@ -53,9 +45,9 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
                 else if(isClose(i, j, k)) {
                     voxel_state[idx(i, j, k)] = CLOSE;
                     // 計算距離
-                    voxel_distance[idx(i, j, k)] = computeDistance(i, j, k);
+                    df_data(i, j, k) = computeDistance(df_data, i, j, k);
                     // 加入close list
-                    insertList(i, j, k, voxel_distance[idx(i, j, k)], close_list_header);
+                    insertList(i, j, k, df_data(i, j, k), close_list_header);
                 }
                 else {
                     voxel_state[idx(i, j, k)] = FAR;
@@ -66,7 +58,7 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
     // Fast Marching Method 
     while(close_list_header != nullptr) {
         // choose closest in clos list, and make it DONE
-        Close *closest = close_list_header;
+        Close_LL *closest = close_list_header;
         close_list_header = close_list_header->next;
         int i = closest->i;
         int j = closest->j;
@@ -85,12 +77,12 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
                 continue;
             else if(voxel_state[idx(x, y, z)] == CLOSE) {
                 // recompute distance
-                double new_distance = computeDistance(x, y, z);
-                if(new_distance < voxel_distance[idx(x, y, z)]) {
-                    voxel_distance[idx(x, y, z)] = new_distance;
+                double new_distance = computeDistance(df_data, x, y, z);
+                if(new_distance < df_data(x, y, z)) {
+                    df_data(x, y, z) = new_distance;
                     // remove old node
-                    Close *current = close_list_header;
-                    Close *previous = nullptr;
+                    Close_LL *current = close_list_header;
+                    Close_LL *previous = nullptr;
                     while(current->i != x || current->j != y || current->k != z) {
                         previous = current;
                         current = current->next;
@@ -108,26 +100,34 @@ void DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points) {
             }
             else if(voxel_state[idx(x, y, z)] == FAR) {
                 voxel_state[idx(x, y, z)] = CLOSE;
-                double distance = computeDistance(x, y, z);
-                voxel_distance[idx(x, y, z)] = distance;
+                double distance = computeDistance(df_data, x, y, z);
+                df_data(x, y, z) = distance;
                 insertList(x, y, z, distance, close_list_header);
             }
         }
     }
+    df_data.max_distance = max_distance;
 
     // 最後判斷模型內外
-    determineInOut();
+    determineInOut(df_data.voxel_distance);
+
+    return df_data;
 }
 
-void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
-    Close *close_list_header = nullptr;
+DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
+    DistanceFieldData df_data;
+    Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
+    df_data.width = width;
+    df_data.height = height;
+    df_data.depth = depth;
     this->width = width;
     this->height = height;
     this->depth = depth;
-    voxel_distance.resize(width * height * depth);
+
+    df_data.voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
     auto start = steady_clock::now();
@@ -137,7 +137,7 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
                 if(voxels[idx(i, j, k)] == 255) {
-                    voxel_distance[idx(i, j, k)] = 0;
+                    df_data(i, j, k) = 0;
                     voxel_state[idx(i, j, k)] = DONE;
                 }
             }
@@ -155,9 +155,9 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
                 else if(isClose(i, j, k)) {
                     voxel_state[idx(i, j, k)] = CLOSE;
                     // 計算距離
-                    voxel_distance[idx(i, j, k)] = computeDistance(i, j, k);
+                    df_data(i, j, k) = computeDistance(df_data, i, j, k);
                     // 加入close list
-                    insertList(i, j, k, voxel_distance[idx(i, j, k)], close_list_header);
+                    insertList(i, j, k, df_data(i, j, k), close_list_header);
                 }
                 else {
                     voxel_state[idx(i, j, k)] = FAR;
@@ -169,7 +169,7 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
     // Fast Marching Method 
     while(close_list_header != nullptr) {
         // choose closest in close list, and make it DONE
-        Close *closest = close_list_header;
+        Close_LL *closest = close_list_header;
         close_list_header = close_list_header->next;
         int i = closest->i;
         int j = closest->j;
@@ -188,12 +188,12 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
                 continue;
             else if(voxel_state[idx(x, y, z)] == CLOSE) {
                 // recompute distance
-                double new_distance = computeDistance(x, y, z);
-                if(new_distance < voxel_distance[idx(x, y, z)]) {
+                double new_distance = computeDistance(df_data, x, y, z);
+                if(new_distance < df_data(i, j, k)) {
                     // recompute distance
-                    double new_distance = computeDistance(x, y, z);
-                    if(new_distance < voxel_distance[idx(x, y, z)]) {
-                        voxel_distance[idx(x, y, z)] = new_distance;
+                    double new_distance = computeDistance(df_data, x, y, z);
+                    if(new_distance < df_data(i, j, k)) {
+                        df_data(i, j, k) = new_distance;
                         // 不用移除在Close中的舊值，因為新的距離小先算完後就變成DONE而自然的跳過
                         // insert new node
                         insertList(x, y, z, new_distance, close_list_header);
@@ -202,29 +202,33 @@ void DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width,
             }
             else if(voxel_state[idx(x, y, z)] == FAR) {
                 voxel_state[idx(x, y, z)] = CLOSE;
-                double distance = computeDistance(x, y, z);
-                voxel_distance[idx(x, y, z)] = distance;
+                double distance = computeDistance(df_data, x, y, z);
+                df_data(i, j, k) = distance;
                 insertList(x, y, z, distance, close_list_header);
             }
         }
     }
+    df_data.max_distance = max_distance;
+
     // 最後判斷模型內外
-    determineInOut();
+    determineInOut(df_data.voxel_distance);
 
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     cout<<"距離場計算時間: "<<diff.count() / 1000<<"s"<<endl;
     cout<<"最大距離值"<<max_distance<<endl;
+
+    return df_data;
 }
 
-void DistanceField3D::insertList(int i, int j, int k, double distance, Close *&close_list_header) {
-    Close *new_node = new Close{i, j, k, distance, nullptr};
+void DistanceField3D::insertList(int i, int j, int k, double distance, Close_LL *&close_list_header) {
+    Close_LL *new_node = new Close_LL{i, j, k, distance, nullptr};
     if(close_list_header == nullptr) {
         close_list_header = new_node;
         return;
     }
-    Close *current = close_list_header;
-    Close *previous = nullptr;
+    Close_LL *current = close_list_header;
+    Close_LL *previous = nullptr;
     while(current != nullptr && current->distance <= distance) {
         previous = current;
         current = current->next;
@@ -239,17 +243,22 @@ void DistanceField3D::insertList(int i, int j, int k, double distance, Close *&c
     }
 }
 
-void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth) {
+DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth) {
+    DistanceFieldData df_data;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
+    df_data.width = width;
+    df_data.height = height;
+    df_data.depth = depth;
     this->width = width;
     this->height = height;
     this->depth = depth;
-    voxel_distance.resize(width * height * depth);
+
+    df_data.voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
-    priority_queue<PQNode, vector<PQNode>, greater<PQNode>> Close_heap;
+    priority_queue<Close_PQ, vector<Close_PQ>, greater<Close_PQ>> Close_heap;
 
     auto start = steady_clock::now();
 
@@ -258,7 +267,7 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
                 if(voxels[idx(i, j, k)] == 255) {
-                    voxel_distance[idx(i, j, k)] = 0;
+                    df_data(i, j, k) = 0;
                     voxel_state[idx(i, j, k)] = DONE;
                 }
             }
@@ -276,8 +285,8 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
                 else if(isClose(i, j, k)) {
                     voxel_state[idx(i, j, k)] = CLOSE;
                     // 計算距離
-                    voxel_distance[idx(i, j, k)] = computeDistance(i, j, k);
-                    Close_heap.push({i, j, k, voxel_distance[idx(i, j, k)]});
+                    df_data(i, j, k) = computeDistance(df_data, i, j, k);
+                    Close_heap.push({i, j, k, df_data(i, j, k)});
                 }
                 else {
                     voxel_state[idx(i, j, k)] = FAR;
@@ -289,7 +298,7 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
     // Fast Marching Method 
     while(!Close_heap.empty()) {
         // choose closest in close heap, and make it DONE
-        PQNode closest = Close_heap.top();
+        Close_PQ closest = Close_heap.top();
         Close_heap.pop();
 
         int i = closest.i;
@@ -314,9 +323,9 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
                 continue;
             else if(voxel_state[idx(x, y, z)] == CLOSE) {
                 // recompute distance
-                double new_distance = computeDistance(x, y, z);
-                if(new_distance < voxel_distance[idx(x, y, z)]) {
-                    voxel_distance[idx(x, y, z)] = new_distance;
+                double new_distance = computeDistance(df_data, x, y, z);
+                if(new_distance < df_data(x, y, z)) {
+                    df_data(x, y, z) = new_distance;
                     // 不用移除舊節點
                     // 直接將同個體素但更短的距離push進去
                     Close_heap.push({x, y, z, new_distance});
@@ -324,22 +333,26 @@ void DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width,
             }
             else if(voxel_state[idx(x, y, z)] == FAR) {
                 voxel_state[idx(x, y, z)] = CLOSE;
-                double distance = computeDistance(x, y, z);
-                voxel_distance[idx(x, y, z)] = distance;
+                double distance = computeDistance(df_data, x, y, z);
+                df_data(x, y, z) = distance;
                 Close_heap.push({x, y, z, distance});
             }
         }
     }
-    // 最後判斷模型內外
-    determineInOut();
+    df_data.max_distance = max_distance;
 
+    // 最後判斷模型內外
+    determineInOut(df_data.voxel_distance);
+    
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     cout<<"距離場計算時間: "<<diff.count() / 1000<<"s"<<endl;
     cout<<"最大距離值"<<max_distance<<endl;
+
+    return df_data;
 }
 
-double DistanceField3D::computeDistance(int i, int j, int k) {
+double DistanceField3D::computeDistance(DistanceFieldData &df_data, int i, int j, int k) {
     double At[3], Bt[3], Ct[3], at[3], bt[3], ct[3], a, b, c, distance;
     for(int dir = 0; dir < 3; dir++) { // 0:x方向, 1:y方向, 2:z方向
         // 定義某個方向的左右兩個鄰居的索引v0和v2 (自己是v1)
@@ -351,9 +364,9 @@ double DistanceField3D::computeDistance(int i, int j, int k) {
         v2[1] = j + offsets[dir * 2 + 1][1];
         v2[2] = k + offsets[dir * 2 + 1][2];
 
-        // double[-1][0]可能沒事，但vector[-1][0]會出錯，所以改成用getDistance安全取值
-        double u0 = getDistance(v0[0], v0[1], v0[2]); 
-        double u2 = getDistance(v2[0], v2[1], v2[2]);
+        // double[-1][0]可能沒事，但vector[-1][0]會出錯，所以取值要先檢查
+        double u0 = isRangeValid(v0[0], v0[1], v0[2]) ? df_data(v0[0], v0[1], v0[2]) : DBL_MAX; 
+        double u2 = isRangeValid(v2[0], v2[1], v2[2]) ? df_data(v2[0], v2[1], v2[2]) : DBL_MAX; 
         if ((v0[0] < 0 || v0[1] < 0 || v0[2] < 0) && (v2[0] >= width || v2[1] >= height || v2[2] >= depth)) { // 兩邊都超出範圍(就是2D的情況)
             At[dir] = 0;
             Bt[dir] = 0;
@@ -436,7 +449,7 @@ bool DistanceField3D::isClose(int i, int j, int k) {
 }
 
 // 分辨內外距離，比如分別從x=0和x=width開始，往內走，並且把距離值乘上-1，如果遇到done就切換in/out狀態
-void DistanceField3D::determineInOut() {
+void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
     vector<int> voxel_out_count = vector<int>(width * height * depth, 0); // 紀錄每個voxel被判斷為模型外部的次數
     vector<double> voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
     // 做x方向的判斷
@@ -468,8 +481,10 @@ void DistanceField3D::determineInOut() {
                 voxel_out_count[idx(i, j, k)]++;
                 voxel_temp1[idx(i, j, k)] = -voxel_temp1[idx(i, j, k)];
             }
+        }
+        for(int k = depth - 1; k >= 0; k--) {
             // 從x=width - 1開始往內走
-            is_out = true;
+            bool is_out = true;
             for(int i = width - 1; i >= 0; i--) {
                   // 遇到模型就切換
                 if(voxel_distance[idx(i, j, k)] == 0 && is_out == true) { // 第一次碰到模型才切換
@@ -527,8 +542,10 @@ void DistanceField3D::determineInOut() {
                 voxel_out_count[idx(i, j, k)]++;
                 voxel_temp1[idx(i, j, k)] = -voxel_temp1[idx(i, j, k)];
             }
+        }
+        for(int k = depth - 1; k >= 0; k--) {
             // 從y=height - 1開始往內走
-            is_out = true;
+            bool is_out = true;
             for(int j = height - 1; j >= 0; j--) {
                   // 遇到模型就切換
                 if(voxel_distance[idx(i, j, k)] == 0 && is_out == true) { // 第一次碰到模型才切換
@@ -586,8 +603,10 @@ void DistanceField3D::determineInOut() {
                 voxel_out_count[idx(i, j, k)]++;
                 voxel_temp1[idx(i, j, k)] = -voxel_temp1[idx(i, j, k)];
             }
+        }
+        for(int j = height - 1; j >= 0; j--) {
             // 從z=depth - 1開始往內走
-            is_out = true;
+            bool is_out = true;
             for(int k = depth - 1; k >= 0; k--) {
                   // 遇到模型就切換
                 if(voxel_distance[idx(i, j, k)] == 0 && is_out == true) { // 第一次碰到模型才切換
