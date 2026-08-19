@@ -20,11 +20,11 @@ public:
     unsigned int instance_VBO_ = 0;
 
     unsigned int size = 0;          // 頂點的數量
-    unsigned int instanceCount = 0; // Instance 的數量
+    unsigned int instanceCount = 1; // Instance 的數量 (預設一個)
 
     // 追蹤 GPU 記憶體容量
     size_t vboCapacityBytes_ = 0;
-    size_t instanceCapacityBytes_ = 0;
+    size_t instanceCapacityBytes_ = sizeof(glm::vec3); // 預設一個vec3的大小
     
     Object_c()
     {
@@ -76,8 +76,9 @@ public:
         glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_c), (void *)(sizeof(Vertex_c::Position) + sizeof(Vertex_c::Color) + sizeof(Vertex_c::Texture)));
         glEnableVertexAttribArray(3);
         
+        glm::vec3 zero_vector(0.0f);
         glBindBuffer(GL_ARRAY_BUFFER, instance_VBO_);
-        glBufferData(GL_ARRAY_BUFFER, 0, 0, GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, instanceCapacityBytes_, &zero_vector, GL_DYNAMIC_DRAW);
 
         // instance for position
         glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
