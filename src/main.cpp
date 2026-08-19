@@ -146,7 +146,7 @@ int main()
     double max_range = max(volume_data.max.x - volume_data.min.x, max(volume_data.max.y - volume_data.min.y, volume_data.max.z - volume_data.min.z));
     glm::vec3 ratio(512 / max_range); // 顯示時統一縮放到一定範圍
     int distance_range = 0;
-    bool is_draw_bi_voxels = false, is_draw_df_voxels = false, is_draw_model_triangles = false;
+    bool is_draw_bi_voxels = false, is_draw_df_voxels = false, is_draw_model_triangles = false, is_draw_bounding_box = true;
 
     // render loop
     // -----------
@@ -186,6 +186,7 @@ int main()
         ImGui::Checkbox("draw model triangles", &is_draw_model_triangles);
         ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
+        ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
 
 
         ImGui::End();
@@ -268,23 +269,25 @@ int main()
         glDrawArrays(GL_LINES, 0, axis.size);
         
         // 畫 bounding box
-        glDepthMask(GL_FALSE); 
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
-        light_shader.setFloat("opacity", 0.5f);
-        glBindVertexArray(cube.VAO_);
-        model = glm::mat4(1.0f);
-        model = glm::scale(model, glm::vec3(volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]));
-        model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
-        model = glm::scale(model, ratio);
-        light_shader.setMat4("model", model);
-        glDrawArrays(GL_TRIANGLES, 0, cube.size);
-        glCullFace(GL_BACK);
-        light_shader.setFloat("opacity", 0.2f);
-        glDrawArrays(GL_TRIANGLES, 0, cube.size);
-        glDisable(GL_CULL_FACE);
-        glDepthMask(GL_TRUE);
+        if(is_draw_bounding_box) {
+            glDepthMask(GL_FALSE); 
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+            light_shader.setFloat("opacity", 0.5f);
+            glBindVertexArray(cube.VAO_);
+            model = glm::mat4(1.0f);
+            model = glm::scale(model, glm::vec3(volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]));
+            model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+            model = glm::scale(model, ratio);
+            light_shader.setMat4("model", model);
+            glDrawArrays(GL_TRIANGLES, 0, cube.size);
+            glCullFace(GL_BACK);
+            light_shader.setFloat("opacity", 0.1f);
+            glDrawArrays(GL_TRIANGLES, 0, cube.size);
+            glDisable(GL_CULL_FACE);
+            glDepthMask(GL_TRUE);
+        }
         
         // ImGui render
         ImGui::Render();
