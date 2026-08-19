@@ -454,7 +454,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
     vector<double> voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
     // 做x方向的判斷
     for(int j = 0; j < height; j++) {
-        for(int k = 0; k < depth; k++) {
+        for(int k = 0; k < depth; k++) { // 切 xz 平面
             // 從x=0開始往內走
             bool is_out = true;
             for(int i = 0; i < width; i++) {
@@ -465,17 +465,14 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp1[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[0][0];
+                    int y0 = j + offsets[0][1];
+                    int z0 = k + offsets[0][2];
+                    int x1 = i + offsets[4][0];
+                    int y1 = j + offsets[4][1];
+                    int z1 = k + offsets[4][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並將距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
@@ -493,17 +490,14 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp2[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[1][0];
+                    int y0 = j + offsets[1][1];
+                    int z0 = k + offsets[1][2];
+                    int x1 = i + offsets[5][0];
+                    int y1 = j + offsets[5][1];
+                    int z1 = k + offsets[5][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
@@ -514,8 +508,8 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
 
     voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
     // 做y方向的判斷
-    for(int i = 0; i < width; i++) {
-        for(int k = 0; k < depth; k++) {
+    for(int k = 0; k < depth; k++) {
+        for(int i = 0; i < width; i++) { // 切 xy 平面
             // 從y=0開始往內走
             bool is_out = true;
             for(int j = 0; j < height; j++) {
@@ -526,24 +520,21 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp1[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[0][0];
+                    int y0 = j + offsets[0][1];
+                    int z0 = k + offsets[0][2];
+                    int x1 = i + offsets[2][0];
+                    int y1 = j + offsets[2][1];
+                    int z1 = k + offsets[2][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
                 voxel_temp1[idx(i, j, k)] = -voxel_temp1[idx(i, j, k)];
             }
         }
-        for(int k = depth - 1; k >= 0; k--) {
+        for(int i = width - 1; i >= 0; i--) {
             // 從y=height - 1開始往內走
             bool is_out = true;
             for(int j = height - 1; j >= 0; j--) {
@@ -554,17 +545,14 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp2[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[1][0];
+                    int y0 = j + offsets[1][1];
+                    int z0 = k + offsets[1][2];
+                    int x1 = i + offsets[3][0];
+                    int y1 = j + offsets[3][1];
+                    int z1 = k + offsets[3][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
@@ -576,7 +564,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
     voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
     // 做z方向的判斷
     for(int i = 0; i < width; i++) {
-        for(int j = 0; j < height; j++) {
+        for(int j = 0; j < height; j++) { // 切 yz 平面
             // 從z=0開始往內走
             bool is_out = true;
             for(int k = 0; k < depth; k++) {
@@ -587,17 +575,14 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp1[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[2][0];
+                    int y0 = j + offsets[2][1];
+                    int z0 = k + offsets[2][2];
+                    int x1 = i + offsets[4][0];
+                    int y1 = j + offsets[4][1];
+                    int z1 = k + offsets[4][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
@@ -615,17 +600,14 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
                 } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
-                    int dir;
-                    for(dir = 0; dir < 6; dir++) {
-                        int x = i + offsets[dir][0];
-                        int y = j + offsets[dir][1];
-                        int z = k + offsets[dir][2];
-                        if(isRangeValid(x, y, z) && voxel_temp2[idx(x, y, z)] < 0) {
-                            break;
-                        }
-                    }
-                    if(dir == 6) 
-                        continue; // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                    int x0 = i + offsets[3][0];
+                    int y0 = j + offsets[3][1];
+                    int z0 = k + offsets[3][2];
+                    int x1 = i + offsets[5][0];
+                    int y1 = j + offsets[5][1];
+                    int z1 = k + offsets[5][2];
+                    if((!isRangeValid(x0, y0, z0) || voxel_temp1[idx(x0, y0, z0)] > 0) && (!isRangeValid(x1, y1, z1) || voxel_temp1[idx(x1, y1, z1)] > 0))  // 如果鄰居都不是外部才確定自己是內部，保持正值，繼續往內走
+                        continue;
                 }
                 // 在外部就count++並距離值變負的
                 voxel_out_count[idx(i, j, k)]++;
@@ -638,7 +620,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
     for(int i = 0; i < width; i++) {
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
-                if(voxel_out_count[idx(i, j, k)] >= 3) {
+                if(voxel_out_count[idx(i, j, k)] >= 4) {
                     voxel_distance[idx(i, j, k)] = -voxel_distance[idx(i, j, k)];
                 }
             }
