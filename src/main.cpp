@@ -209,12 +209,12 @@ int main()
         shader.setVec3("viewPos", camera.Position);
 
         // 畫一個測試方塊
-        glBindVertexArray(cube.VAO_);
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(10.0f, 10.0f, 10.0f));
-        model = glm::scale(model, glm::vec3(10, 10, 10));
-        shader.setMat4("model", model);
-        glDrawArrays(GL_TRIANGLES, 0, cube.size);
+        // glBindVertexArray(cube.VAO_);
+        // model = glm::mat4(1.0f);
+        // model = glm::translate(model, glm::vec3(10.0f, 10.0f, 10.0f));
+        // model = glm::scale(model, glm::vec3(10, 10, 10));
+        // shader.setMat4("model", model);
+        // glDrawArrays(GL_TRIANGLES, 0, cube.size);
         
         // 畫模型的三角片
         if(is_draw_model_triangles) {
@@ -292,6 +292,7 @@ int main()
         // ImGui render
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
