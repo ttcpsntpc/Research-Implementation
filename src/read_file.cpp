@@ -198,7 +198,6 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::lowest();
-    cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
 
     // 根據不同inf的資訊決定怎麼讀並算最大最小值
     for(int i = 0; i < volume_data.size; i++) {
@@ -219,7 +218,7 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
 
         temp_float_data.push_back(value);
     }
-    cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
+    cout<<endl<<"max: "<<maximum<<" min: "<<minimum<<endl;
 
     volume_data.voxel_data.clear();
     
@@ -808,7 +807,9 @@ void triangle2voxel(VolumeData &voxels, glm::vec3 v[3]) {
 // 可簡單判斷STL檔案格式是binary或ASCII
 VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
     VolumeData stl_data;
-    
+    for(int i = 0; i < 3; i++)  stl_data.resolution[i] = {RESOLUTION};
+    stl_data.size = stl_data.resolution[0] * stl_data.resolution[1] * stl_data.resolution[2];
+
     auto start = steady_clock::now();
     
     // 快速讀一次來判斷格式
@@ -872,12 +873,12 @@ VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
         }
     }
     
-    // 算總三角片範圍、邊界 (邊緣各預留1個單位)
+    // 算總三角片範圍、邊界 (邊緣各預留2個單位)
     glm::vec3 range = stl_data.max - stl_data.min;
     for(int i = 0; i < 3; i++)
-        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 2);
-    stl_data.min -= stl_data.voxel_size;
-    stl_data.max += stl_data.voxel_size;
+        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 4);
+    stl_data.min -= stl_data.voxel_size * glm::vec3(2.0f, 2.0f, 2.0f);
+    stl_data.max += stl_data.voxel_size * glm::vec3(2.0f, 2.0f, 2.0f);
     stl_data.size = stl_data.resolution[0] * stl_data.resolution[1] * stl_data.resolution[2];
     stl_data.voxel_data.resize(stl_data.size, 0);
 
@@ -956,6 +957,8 @@ VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
 // 暫不處裡face有超過三個頂點的情況
 VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
     VolumeData obj_data;
+    for(int i = 0; i < 3; i++)  obj_data.resolution[i] = {RESOLUTION};
+    obj_data.size = obj_data.resolution[0] * obj_data.resolution[1] * obj_data.resolution[2];
 
     auto start = steady_clock::now();
 
@@ -990,9 +993,9 @@ VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
 
     glm::vec3 range = obj_data.max - obj_data.min;
     for(int i = 0; i < 3; i++)
-        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 2);
-    obj_data.min -= obj_data.voxel_size;
-    obj_data.max += obj_data.voxel_size;
+        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 4);
+    obj_data.min -= obj_data.voxel_size * glm::vec3(2.0f, 2.0f, 2.0f);
+    obj_data.max += obj_data.voxel_size * glm::vec3(2.0f, 2.0f, 2.0f);
     obj_data.size = obj_data.resolution[0] * obj_data.resolution[1] * obj_data.resolution[2];
     obj_data.voxel_data.resize(obj_data.size, 0);
 

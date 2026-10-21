@@ -45,14 +45,14 @@ struct VolumeData {
     string file_name; // 檔名 
     
     // struct InfData {} inf_data;
-    glm::ivec3 resolution = {RESOLUTION, RESOLUTION, RESOLUTION}; // [width, height, depth]
+    glm::ivec3 resolution; // [width, height, depth]
     SampleType sample_type;
     glm::vec3 voxel_size;
     EndianType endian = LITTLE;
     glm::vec3 max, min;
 
     // struct RawData {} volume_data;
-    int size;
+    int size; // 幾個voxels
     int intensity_counts[256] = {0};
     vector<unsigned char> voxel_data; // 真正存放體素資料
 

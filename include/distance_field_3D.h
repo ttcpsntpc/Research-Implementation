@@ -26,6 +26,7 @@ using namespace std;
 struct DistanceFieldData {
     string file_name;
     int width, height, depth; 
+    int size;
     double max_distance; // 不論內外的最大值
     
     vector<double> voxel_distance;
@@ -72,6 +73,7 @@ public:
 private:
     int width, height, depth; 
     double max_distance;
+    int size; // 幾個voxels
     
     vector<VoxelState> voxel_state;
 

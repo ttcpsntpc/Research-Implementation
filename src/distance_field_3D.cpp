@@ -16,12 +16,10 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
-    df_data.width = width;
-    df_data.height = height;
-    df_data.depth = depth;
-    this->width = width;
-    this->height = height;
-    this->depth = depth;
+    df_data.width = this->width = width;
+    df_data.height = this->height = height;
+    df_data.depth = this->depth = depth;
+    df_data.size = width * height * depth;
 
     df_data.voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
@@ -120,12 +118,10 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxel
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
-    df_data.width = width;
-    df_data.height = height;
-    df_data.depth = depth;
-    this->width = width;
-    this->height = height;
-    this->depth = depth;
+    df_data.width = this->width = width;
+    df_data.height = this->height = height;
+    df_data.depth = this->depth = depth;
+    df_data.size = width * height * depth;
 
     df_data.voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
@@ -248,13 +244,11 @@ DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxel
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
     max_distance = 0;
-    df_data.width = width;
-    df_data.height = height;
-    df_data.depth = depth;
-    this->width = width;
-    this->height = height;
-    this->depth = depth;
-
+    df_data.width = this->width = width;
+    df_data.height = this->height = height;
+    df_data.depth = this->depth = depth;
+    df_data.size = width * height * depth;
+    
     df_data.voxel_distance.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
