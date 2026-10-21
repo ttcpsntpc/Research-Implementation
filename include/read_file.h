@@ -10,15 +10,14 @@
 #include <filesystem>
 #include <algorithm>
 #include "vertex.h"
+#include "distance_field_3D.h"
 using namespace std;
 
 #define RESOLUTION 64 // 預設regular grid大小
 
-inline vector<Vertex_c> vertices_tri; // 儲存STL/OBJ模型的原始三角片
-
 enum SampleType
 {
-    INT, UNSIGNED_INT, CHAR, UNSIGNED_CHAR, FLOAT, UNSIGNED_SHORT, SHORT
+    INT, UNSIGNED_INT, CHAR, UNSIGNED_CHAR, FLOAT, UNSIGNED_SHORT, SHORT, DOUBLE
 };
 enum EndianType
 {
@@ -43,6 +42,8 @@ struct VecData {
 // 用regular grid存放scalar (intensity) 的voxel
 struct VolumeData { 
     // 一個VolumeData也只有一組infdata跟rawdata 乾脆合併
+    string file_name; // 檔名 
+    
     // struct InfData {} inf_data;
     glm::ivec3 resolution = {RESOLUTION, RESOLUTION, RESOLUTION}; // [width, height, depth]
     SampleType sample_type;
@@ -73,13 +74,18 @@ struct TxtData {
 
 
 ///// 讀各種檔案 /////
-VecData ReadVecFile(const char *vec_filename);
+VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename); // 讀一般unsigned char的體素資料
 bool ReadInfFile(const char *inf_filename, VolumeData &volume_data);
 bool ReadRawFile(const char *raw_filename, VolumeData &volume_data);
-VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename);
+
+DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename); // 讀距離場 (double) 的體素資料
+bool ReadInfFile(const char *inf_filename, DistanceFieldData &volume_data);
+bool ReadRawFile(const char *raw_filename, DistanceFieldData &volume_data);
+
+VecData ReadVecFile(const char *vec_filename);
 TxtData ReadTxtFile(const char *txt_filename);
-VolumeData ReadStlFile(const char *stl_filename);
-VolumeData ReadObjFile(const char *stl_filename);
+VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri);
+VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri);
 
 ///// 一些中間函式 /////
 void triangle2voxel(VolumeData &volume_data, glm::vec3 triangle_vertex[3]); // voxelization
@@ -90,5 +96,10 @@ T ReadAndConvert(EndianType endian, std::ifstream& ifs);
 vector<unsigned char> cumulativeDistributionEqualization(VolumeData &volume_data);
 vector<unsigned char> adaptiveHistogramEqualization(VolumeData &volume_data, int side);
 vector<unsigned char> CLAHE(VolumeData &volume_data, int block_edge, float threshold);
+
+///// 寫各種檔案 /////
+void WriteDFVolumeFile(DistanceFieldData &df_data, string file_name); // 讀距離場的體素資料 // 因為計算距離場後的DistanceFieldData不會有檔名，所以在這邊加，可改進
+bool WriteDFInfFile(DistanceFieldData &df_data, string file_name);
+bool WriteDFRawFile(DistanceFieldData &df_data, string file_name);
 
 #endif

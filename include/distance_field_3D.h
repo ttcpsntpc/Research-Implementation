@@ -24,8 +24,9 @@ using namespace std;
 */
 
 struct DistanceFieldData {
+    string file_name;
     int width, height, depth; 
-    double max_distance;
+    double max_distance; // 不論內外的最大值
     
     vector<double> voxel_distance;
     

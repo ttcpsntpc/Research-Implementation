@@ -50,7 +50,8 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-VolumeData volume_data = ReadObjFile("../../raw/teapot.obj");
+vector<Vertex_c> vertices_tri;
+VolumeData volume_data = ReadObjFile("../../raw/teapot.obj", &vertices_tri);
 DistanceField3D DF;
 UIManager UI;
 

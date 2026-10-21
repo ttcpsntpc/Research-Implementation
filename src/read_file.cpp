@@ -45,10 +45,10 @@ VecData ReadVecFile(const char *vec_filename)
 
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀vec檔時間: "<<diff.count()<<" ms"<<endl;
 
     cout<<"vector resolution: "<<vec_file.resolution[0]<<" "<<vec_file.resolution[1]<<endl;
     cout<<"max speed: "<<vec_file.max_speed<<endl;
+    cout<<"讀vec檔時間: "<<diff.count()<<" ms\n"<<endl;
     return vec_file;
 }
 
@@ -64,7 +64,6 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data)
     auto start = steady_clock::now();
 
     string line;
-    //string raw_file_name;
     while(getline(ifs, line))
     {
         if(line.empty() || line[0] == '#') continue; // 跳過空行和註解行
@@ -79,7 +78,8 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data)
         
         if(key == "raw-file" || key == "filename")   
         {
-            //raw_file_name = value; 
+            size_t lastDot = value.find_last_of(".");
+            volume_data.file_name = value.substr(0, lastDot);
         }
         // resolution的格式不固定，中間用%*c直接跳過
         else if(key.find("resolution") != string::npos)
@@ -104,6 +104,8 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data)
                 volume_data.sample_type = FLOAT;
             else if(value.find("short") != string::npos)
                 volume_data.sample_type = SHORT;
+            else if(value.find("double") != string::npos)
+                volume_data.sample_type = DOUBLE;
             // 完整型態名稱都沒有就代表是縮寫
             else if(value.find("ui") != string::npos)
                 volume_data.sample_type = UNSIGNED_INT;
@@ -145,7 +147,7 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data)
     
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀inf檔時間: "<<diff.count()<<" ms"<<endl;
+    cout<<"讀inf檔時間: "<<diff.count()<<" ms\n"<<endl;
 
     return true;
 }
@@ -196,6 +198,7 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::lowest();
+    cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
 
     // 根據不同inf的資訊決定怎麼讀並算最大最小值
     for(int i = 0; i < volume_data.size; i++) {
@@ -209,8 +212,8 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
             case INT:            value = static_cast<float>(ReadAndConvert<int>(volume_data.endian, ifs)); break;
             case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(volume_data.endian, ifs)); break;
             case FLOAT:          value = ReadAndConvert<float>(volume_data.endian, ifs); break;
+            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(volume_data.endian, ifs)); break;
         }
-
         if(value > maximum) maximum = value;
         if(value < minimum) minimum = value;
 
@@ -219,7 +222,7 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
     cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
 
     volume_data.voxel_data.clear();
-
+    
     // 將資料正規化到0~255
     float range = maximum - minimum;
     for(int i = 0; i < volume_data.size; i++) {
@@ -233,7 +236,7 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
     
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀raw檔時間: "<<diff.count()<<" ms"<<endl;
+    cout<<"讀raw檔時間: "<<diff.count()<<" ms\n"<<endl;
 
     return true;
 }
@@ -248,6 +251,119 @@ VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename) {
     }
     return volume_data;
 }
+
+bool ReadInfFile(const char *inf_filename, DistanceFieldData &df_data) {
+    ifstream ifs(inf_filename, ios::in);
+    if (ifs.fail())
+    {
+        cout << "Failed to open inf file." << '\n';
+        return false;
+    }
+
+    auto start = steady_clock::now();
+
+    string line;
+    while(getline(ifs, line))
+    {
+        if(line.empty() || line[0] == '#') continue; // 跳過空行和註解行
+        size_t pos = line.find('=');
+        if (pos == string::npos) continue; // 沒有等號的行也跳過
+
+        // key跟value改成全部小寫，以免大小寫不一致導致讀取失敗
+        string key = line.substr(0, pos);
+        string value = line.substr(pos + 1);
+        transform(key.begin(), key.end(), key.begin(), ::tolower);
+        transform(value.begin(), value.end(), value.begin(), ::tolower);
+        
+        if(key == "raw-file" || key == "filename")   
+        {
+            size_t lastDot = value.find_last_of(".");
+            df_data.file_name = value.substr(0, lastDot); 
+        }
+        // resolution的格式不固定，中間用%*c直接跳過
+        else if(key.find("resolution") != string::npos)
+            sscanf(value.c_str(), "%d%*c%d%*c%d", 
+                &df_data.width, 
+                &df_data.height, 
+                &df_data.depth);
+        else if(key.find("max") != string::npos)
+            sscanf(value.c_str(), "%lf%", 
+                &df_data.max_distance);
+    }
+    
+    auto end = steady_clock::now();
+    auto diff = duration_cast<milliseconds>(end - start);
+    cout<<"讀inf檔時間: "<<diff.count()<<" ms\n"<<endl;
+
+    return true;
+}
+
+bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
+    if(raw_filename == nullptr)
+    {
+        return false;
+    }
+    ifstream ifs(raw_filename, ios::in | ios::binary);
+    if (ifs.fail())
+    {
+        cout << "Failed to open raw file." << '\n';
+        return false;
+    }
+
+    auto start = steady_clock::now();
+    
+    int x = df_data.width;
+    int y = df_data.height;
+    int z = df_data.depth;
+
+    int size = x * y * z; 
+
+    df_data.voxel_distance.clear();
+    df_data.voxel_distance.reserve(size);
+
+    float minimum = numeric_limits<float>::max();
+    float maximum = numeric_limits<float>::lowest();
+
+    // 根據不同inf的資訊決定怎麼讀並算最大最小值
+    for(int i = 0; i < size; i++) {
+        float value;
+
+        switch(DOUBLE) {
+            case CHAR:           value = static_cast<float>(ReadAndConvert<char>(LITTLE, ifs)); break;
+            case UNSIGNED_CHAR:  value = static_cast<float>(ReadAndConvert<unsigned char>(LITTLE, ifs)); break;
+            case SHORT:          value = static_cast<float>(ReadAndConvert<short>(LITTLE, ifs)); break;
+            case UNSIGNED_SHORT: value = static_cast<float>(ReadAndConvert<unsigned short>(LITTLE, ifs)); break;
+            case INT:            value = static_cast<float>(ReadAndConvert<int>(LITTLE, ifs)); break;
+            case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(LITTLE, ifs)); break;
+            case FLOAT:          value = ReadAndConvert<float>(LITTLE, ifs); break;
+            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(LITTLE, ifs)); break;
+        }
+        if(value > maximum) maximum = value;
+        if(value < minimum) minimum = value;
+
+        df_data.voxel_distance.push_back(value);
+    }
+    cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
+    
+    auto end = steady_clock::now();
+    auto diff = duration_cast<milliseconds>(end - start);
+    cout<<"讀raw檔時間: "<<diff.count()<<" ms\n"<<endl;
+
+    return true;
+}
+
+
+DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename) {
+    DistanceFieldData df_data;
+    if (!ReadInfFile(inf_filename, df_data)) {
+        cout<<"Reading inf file error"<<endl;
+    }
+    if (!ReadRawFile(raw_filename, df_data)) {
+        cout<<"Reading raw file error"<<endl;
+    }
+    return df_data;
+}
+
 
 // 最基本的資料平均方法
 vector<unsigned char> cumulativeDistributionEqualization(VolumeData volume_data) {
@@ -595,7 +711,7 @@ TxtData ReadTxtFile(const char *txt_filename)
 
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀檔時間: "<<diff.count()<<" ms"<<endl;
+    cout<<"讀txt檔時間: "<<diff.count()<<" ms\n"<<endl;
 
     return txt_data;
 }
@@ -690,7 +806,7 @@ void triangle2voxel(VolumeData &voxels, glm::vec3 v[3]) {
 }
 
 // 可簡單判斷STL檔案格式是binary或ASCII
-VolumeData ReadStlFile(const char *stl_filename) {
+VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
     VolumeData stl_data;
     
     auto start = steady_clock::now();
@@ -701,6 +817,12 @@ VolumeData ReadStlFile(const char *stl_filename) {
         cout<<"Failed to open file."<<endl;
         return stl_data;
     }
+
+    string filename = stl_filename;
+    size_t lastSlash = filename.find_last_of("/\\");
+    filename = (lastSlash == string::npos) ? filename : filename.substr(lastSlash + 1); // 先擷取斜線後字串
+    size_t lastDot = filename.find_last_of(".");
+    stl_data.file_name = (lastDot == string::npos) ? filename : filename.substr(0, lastDot) + "_df"; // 再把.之後刪掉
 
     streamsize file_size = ifs_check.tellg(); // 檔案開頭到當下的byte數
     ifs_check.clear();
@@ -750,12 +872,12 @@ VolumeData ReadStlFile(const char *stl_filename) {
         }
     }
     
-    // 算總三角片範圍、邊界 (邊緣各預留2個單位)
+    // 算總三角片範圍、邊界 (邊緣各預留1個單位)
     glm::vec3 range = stl_data.max - stl_data.min;
     for(int i = 0; i < 3; i++)
-        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 4);
-    stl_data.min -= stl_data.voxel_size * glm::vec3(2, 2, 2);
-    stl_data.max += stl_data.voxel_size * glm::vec3(2, 2, 2);
+        stl_data.voxel_size[i] = range[i] / (stl_data.resolution[i] - 2);
+    stl_data.min -= stl_data.voxel_size;
+    stl_data.max += stl_data.voxel_size;
     stl_data.size = stl_data.resolution[0] * stl_data.resolution[1] * stl_data.resolution[2];
     stl_data.voxel_data.resize(stl_data.size, 0);
 
@@ -782,8 +904,8 @@ VolumeData ReadStlFile(const char *stl_filename) {
             glm::vec3 d1 = vertex[2] - vertex[1];
             glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
             for(int i = 0; i < 3; i++) {
-                vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
-            }
+                (*vertices_tri).push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+            }        
         }
     } else {
         string token;
@@ -810,7 +932,7 @@ VolumeData ReadStlFile(const char *stl_filename) {
                 glm::vec3 d1 = vertex[2] - vertex[1];
                 glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
                 for(int i = 0; i < 3; i++) {
-                    vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+                    (*vertices_tri).push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
                 }
             }
         }
@@ -822,16 +944,17 @@ VolumeData ReadStlFile(const char *stl_filename) {
     auto diff = duration_cast<milliseconds>(end - start);
 
     cout << "STL File Format: " << (is_binary ? "Binary" : "ASCII") <<endl;
-    cout<<"讀stl檔時間: "<<diff.count() / 1000.0<<"s"<<endl;
 
     cout << "Bounding Box Min: (" << stl_data.min.x << ", " << stl_data.min.y << ", " << stl_data.min.z << ")" << endl;
     cout << "Bounding Box Max: (" << stl_data.max.x << ", " << stl_data.max.y << ", " << stl_data.max.z << ")" << endl;
     
+    cout<<"讀stl檔時間: "<<diff.count() / 1000.0<<"s\n"<<endl;
+
     return stl_data;
 }
 
 // 暫不處裡face有超過三個頂點的情況
-VolumeData ReadObjFile(const char *stl_filename) {
+VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
     VolumeData obj_data;
 
     auto start = steady_clock::now();
@@ -841,6 +964,12 @@ VolumeData ReadObjFile(const char *stl_filename) {
     if(!ifs.is_open()) {
         cout<<"Failed to open file."<<endl;
     }
+
+    string filename = stl_filename;
+    size_t lastSlash = filename.find_last_of("/\\");
+    filename = (lastSlash == string::npos) ? filename : filename.substr(lastSlash + 1); // 先擷取斜線後字串
+    size_t lastDot = filename.find_last_of(".");
+    obj_data.file_name = (lastDot == string::npos) ? filename : filename.substr(0, lastDot) + "_df"; // 再把.之後刪掉
 
     vector<glm::vec3> vertices;
     obj_data.min = glm::vec3(numeric_limits<float>::max());
@@ -861,9 +990,9 @@ VolumeData ReadObjFile(const char *stl_filename) {
 
     glm::vec3 range = obj_data.max - obj_data.min;
     for(int i = 0; i < 3; i++)
-        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 4);
-    obj_data.min -= obj_data.voxel_size * glm::vec3(2, 2, 2);
-    obj_data.max += obj_data.voxel_size * glm::vec3(2, 2, 2);
+        obj_data.voxel_size[i] = range[i] / (obj_data.resolution[i] - 2);
+    obj_data.min -= obj_data.voxel_size;
+    obj_data.max += obj_data.voxel_size;
     obj_data.size = obj_data.resolution[0] * obj_data.resolution[1] * obj_data.resolution[2];
     obj_data.voxel_data.resize(obj_data.size, 0);
 
@@ -893,7 +1022,7 @@ VolumeData ReadObjFile(const char *stl_filename) {
             glm::vec3 d1 = vertex[2] - vertex[1];
             glm::vec3 normal(d0.y*d1.z - d0.z*d1.y, d0.z*d1.x - d0.x*d1.z, d0.x*d1.y - d0.y*d1.x);
             for(int i = 0; i < 3; i++) {
-                vertices_tri.push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
+                (*vertices_tri).push_back(Vertex_c{{vertex[i].x, vertex[i].y, vertex[i].z}, {1.0, 0.8, 0.0}, {}, {normal.x, normal.y, normal.z}});
             }
         }
     }
@@ -903,10 +1032,59 @@ VolumeData ReadObjFile(const char *stl_filename) {
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     
-    cout<<"讀obj檔時間: "<<diff.count() / 1000.0<<"s"<<endl;
 
     cout << "Bounding Box Min: (" << obj_data.min.x << ", " << obj_data.min.y << ", " << obj_data.min.z << ")" << endl;
     cout << "Bounding Box Max: (" << obj_data.max.x << ", " << obj_data.max.y << ", " << obj_data.max.z << ")" << endl;
 
+    cout<<"讀obj檔時間: "<<diff.count() / 1000.0<<"s\n"<<endl;
+
     return obj_data;
+}
+
+// 需先確保output檔案夾存在
+bool WriteDFInfFile(DistanceFieldData &df_data, string file_name) {
+    ofstream ofs("../../output/" + file_name + ".inf", ios::out);
+    if(!ofs.is_open()) {
+        cout<<"Faild to open inf file."<<endl;
+        return false;
+    }
+
+    ofs<<"raw-file="<<file_name + ".raw"<<endl;
+    ofs<<"resolution="
+       <<df_data.width<<"x"
+       <<df_data.height<<"x"
+       <<df_data.depth<<endl;
+    ofs<<"sample-type="<<"double"<<endl; // 距離場目前都用Double存
+    ofs<<"endian=little"<<endl; // 預設都是little endian
+    ofs<<"Max="<<df_data.max_distance<<endl;
+    ofs.close();
+
+    return true;
+}
+
+bool WriteDFRawFile(DistanceFieldData &df_data, string file_name) {
+    ofstream ofs("../../output/" + file_name + ".raw", ios::out | ios::binary);
+    if (!ofs.is_open()) {
+        cout << "Failed to open raw file." << endl;
+        return false;
+    }
+
+    // 將所有 voxel 資料以二進位格式寫入
+    ofs.write(
+        reinterpret_cast<const char*>(df_data.voxel_distance.data()),
+        static_cast<streamsize>(df_data.voxel_distance.size()* sizeof(double))
+    );
+
+    ofs.close();
+    
+    return true;
+}
+
+void WriteDFVolumeFile( DistanceFieldData &df_data, string file_name) {
+    if (!WriteDFInfFile(df_data, file_name)) {
+        cout<<"Writing inf file error"<<endl;
+    }
+    if (!WriteDFRawFile(df_data, file_name)) {
+        cout<<"Writing raw file error"<<endl;
+    }
 }
