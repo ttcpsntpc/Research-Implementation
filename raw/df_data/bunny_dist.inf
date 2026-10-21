@@ -1,0 +1,5 @@
+raw-file=bunny_dist.raw
+resolution=192x157x184
+sample-type=float
+voxel-size=0.100000:0.100000:0.100000
+endian=little

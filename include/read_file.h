@@ -79,8 +79,7 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data);
 bool ReadRawFile(const char *raw_filename, VolumeData &volume_data);
 
 DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename); // 讀距離場 (double) 的體素資料
-bool ReadInfFile(const char *inf_filename, DistanceFieldData &volume_data);
-bool ReadRawFile(const char *raw_filename, DistanceFieldData &volume_data);
+bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, DistanceFieldData &df_data);
 
 VecData ReadVecFile(const char *vec_filename);
 TxtData ReadTxtFile(const char *txt_filename);

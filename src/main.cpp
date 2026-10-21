@@ -140,7 +140,8 @@ int main()
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
-    DistanceFieldData df_data = DF.compute_PQ(volume_data.voxel_data, volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]);
+    // DistanceFieldData df_data = DF.compute_PQ(volume_data.voxel_data, volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]);
+    DistanceFieldData df_data = ReadDFVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw"); // 學姊的
 
     UI.init();
 
@@ -173,7 +174,7 @@ int main()
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
         ImGui::Begin("GUI");
-        ImGui::SliderInt("showing distance", &distance_range, -(df_data.max_distance + 1), df_data.max_distance + 1);
+        ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.min_distance - 1), (int)df_data.max_distance + 1);
         if(ImGui::Button("update voxels")) {
             vector<glm::vec3> cube_pos;
             for(int i = 0; i < df_data.width; i++)

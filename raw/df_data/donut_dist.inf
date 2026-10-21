@@ -1,0 +1,5 @@
+raw-file=donut.raw
+resolution=54x25x52
+sample-type=float
+voxel-size=0.100000:0.100000:0.100000
+endian=little

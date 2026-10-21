@@ -1,0 +1,5 @@
+raw-file=teapot_dist.raw
+resolution=398x217x195
+sample-type=float
+voxel-size=0.100000:0.100000:0.100000
+endian=little

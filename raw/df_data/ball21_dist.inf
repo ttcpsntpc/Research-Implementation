@@ -1,0 +1,5 @@
+raw-file=ball21.raw
+resolution=25x25x25
+sample-type=float
+voxel-size=0.100000:0.100000:0.100000
+endian=little

@@ -1,0 +1,5 @@
+raw-file=ball67_dist.raw
+resolution=71x71x71
+sample-type=float
+voxel-size=0.030000:0.030000:0.030000
+endian=little

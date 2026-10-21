@@ -27,7 +27,7 @@ struct DistanceFieldData {
     string file_name;
     int width, height, depth; 
     int size;
-    double max_distance; // 不論內外的最大值
+    double max_distance, min_distance; // 不論內外的最大值
     
     vector<double> voxel_distance;
     

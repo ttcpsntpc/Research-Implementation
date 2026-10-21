@@ -251,53 +251,8 @@ VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename) {
     return volume_data;
 }
 
-bool ReadInfFile(const char *inf_filename, DistanceFieldData &df_data) {
-    ifstream ifs(inf_filename, ios::in);
-    if (ifs.fail())
-    {
-        cout << "Failed to open inf file." << '\n';
-        return false;
-    }
-
-    auto start = steady_clock::now();
-
-    string line;
-    while(getline(ifs, line))
-    {
-        if(line.empty() || line[0] == '#') continue; // 跳過空行和註解行
-        size_t pos = line.find('=');
-        if (pos == string::npos) continue; // 沒有等號的行也跳過
-
-        // key跟value改成全部小寫，以免大小寫不一致導致讀取失敗
-        string key = line.substr(0, pos);
-        string value = line.substr(pos + 1);
-        transform(key.begin(), key.end(), key.begin(), ::tolower);
-        transform(value.begin(), value.end(), value.begin(), ::tolower);
-        
-        if(key == "raw-file" || key == "filename")   
-        {
-            size_t lastDot = value.find_last_of(".");
-            df_data.file_name = value.substr(0, lastDot); 
-        }
-        // resolution的格式不固定，中間用%*c直接跳過
-        else if(key.find("resolution") != string::npos)
-            sscanf(value.c_str(), "%d%*c%d%*c%d", 
-                &df_data.width, 
-                &df_data.height, 
-                &df_data.depth);
-        else if(key.find("max") != string::npos)
-            sscanf(value.c_str(), "%lf%", 
-                &df_data.max_distance);
-    }
-    
-    auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀inf檔時間: "<<diff.count()<<" ms\n"<<endl;
-
-    return true;
-}
-
-bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
+// VolumeData只是用來輔助儲存檔案資訊
+bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, DistanceFieldData &df_data) {
     if(raw_filename == nullptr)
     {
         return false;
@@ -311,11 +266,17 @@ bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
 
     auto start = steady_clock::now();
     
+    df_data.file_name = volume_data.file_name;
+    df_data.width = volume_data.resolution[0];
+    df_data.height = volume_data.resolution[1];
+    df_data.depth = volume_data.resolution[2];
+    df_data.size = df_data.width * df_data.height * df_data.depth;
+
     int x = df_data.width;
     int y = df_data.height;
     int z = df_data.depth;
 
-    int size = x * y * z; 
+    int size = df_data.size; 
 
     df_data.voxel_distance.clear();
     df_data.voxel_distance.reserve(size);
@@ -327,15 +288,15 @@ bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
     for(int i = 0; i < size; i++) {
         float value;
 
-        switch(DOUBLE) {
-            case CHAR:           value = static_cast<float>(ReadAndConvert<char>(LITTLE, ifs)); break;
-            case UNSIGNED_CHAR:  value = static_cast<float>(ReadAndConvert<unsigned char>(LITTLE, ifs)); break;
-            case SHORT:          value = static_cast<float>(ReadAndConvert<short>(LITTLE, ifs)); break;
-            case UNSIGNED_SHORT: value = static_cast<float>(ReadAndConvert<unsigned short>(LITTLE, ifs)); break;
-            case INT:            value = static_cast<float>(ReadAndConvert<int>(LITTLE, ifs)); break;
-            case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(LITTLE, ifs)); break;
-            case FLOAT:          value = ReadAndConvert<float>(LITTLE, ifs); break;
-            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(LITTLE, ifs)); break;
+        switch(volume_data.sample_type) {
+            case CHAR:           value = static_cast<float>(ReadAndConvert<char>(volume_data.endian, ifs)); break;
+            case UNSIGNED_CHAR:  value = static_cast<float>(ReadAndConvert<unsigned char>(volume_data.endian, ifs)); break;
+            case SHORT:          value = static_cast<float>(ReadAndConvert<short>(volume_data.endian, ifs)); break;
+            case UNSIGNED_SHORT: value = static_cast<float>(ReadAndConvert<unsigned short>(volume_data.endian, ifs)); break;
+            case INT:            value = static_cast<float>(ReadAndConvert<int>(volume_data.endian, ifs)); break;
+            case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(volume_data.endian, ifs)); break;
+            case FLOAT:          value = ReadAndConvert<float>(volume_data.endian, ifs); break;
+            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(volume_data.endian, ifs)); break;
         }
         if(value > maximum) maximum = value;
         if(value < minimum) minimum = value;
@@ -343,7 +304,8 @@ bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
         df_data.voxel_distance.push_back(value);
     }
     cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
-    
+    df_data.max_distance = maximum; df_data.min_distance = minimum;
+
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     cout<<"讀raw檔時間: "<<diff.count()<<" ms\n"<<endl;
@@ -353,11 +315,12 @@ bool ReadRawFile(const char *raw_filename, DistanceFieldData &df_data) {
 
 
 DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename) {
-    DistanceFieldData df_data;
-    if (!ReadInfFile(inf_filename, df_data)) {
+    VolumeData volume_data;
+    if (!ReadInfFile(inf_filename, volume_data)) {
         cout<<"Reading inf file error"<<endl;
     }
-    if (!ReadRawFile(raw_filename, df_data)) {
+    DistanceFieldData df_data;
+    if (!ReadRawFile(raw_filename, volume_data, df_data)) {
         cout<<"Reading raw file error"<<endl;
     }
     return df_data;
