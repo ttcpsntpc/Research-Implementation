@@ -169,7 +169,7 @@ T ReadAndConvert(EndianType endian, std::ifstream& ifs) {
     return value;
 }
 
-bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
+bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, bool isNormalized)
 {
     if(raw_filename == nullptr)
     {
@@ -190,48 +190,51 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
 
     volume_data.size = x * y * z; 
 
-    // 讀進的數值都先用float存
-    vector<float> temp_float_data;
-    temp_float_data.clear();
-    temp_float_data.reserve(volume_data.size);
+    // 讀進的數值都先用double存
+    vector<double> temp_double_data;
+    temp_double_data.clear();
+    temp_double_data.reserve(volume_data.size);
     volume_data.voxel_data.reserve(volume_data.size);
 
-    float minimum = numeric_limits<float>::max();
-    float maximum = numeric_limits<float>::lowest();
+    double minimum = numeric_limits<double>::max();
+    double maximum = numeric_limits<double>::lowest();
 
     // 根據不同inf的資訊決定怎麼讀並算最大最小值
     for(int i = 0; i < volume_data.size; i++) {
-        float value;
+        double value;
 
         switch(volume_data.sample_type) {
-            case CHAR:           value = static_cast<float>(ReadAndConvert<char>(volume_data.endian, ifs)); break;
-            case UNSIGNED_CHAR:  value = static_cast<float>(ReadAndConvert<unsigned char>(volume_data.endian, ifs)); break;
-            case SHORT:          value = static_cast<float>(ReadAndConvert<short>(volume_data.endian, ifs)); break;
-            case UNSIGNED_SHORT: value = static_cast<float>(ReadAndConvert<unsigned short>(volume_data.endian, ifs)); break;
-            case INT:            value = static_cast<float>(ReadAndConvert<int>(volume_data.endian, ifs)); break;
-            case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(volume_data.endian, ifs)); break;
-            case FLOAT:          value = ReadAndConvert<float>(volume_data.endian, ifs); break;
-            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(volume_data.endian, ifs)); break;
+            case CHAR:           value = static_cast<double>(ReadAndConvert<char>(volume_data.endian, ifs)); break;
+            case UNSIGNED_CHAR:  value = static_cast<double>(ReadAndConvert<unsigned char>(volume_data.endian, ifs)); break;
+            case SHORT:          value = static_cast<double>(ReadAndConvert<short>(volume_data.endian, ifs)); break;
+            case UNSIGNED_SHORT: value = static_cast<double>(ReadAndConvert<unsigned short>(volume_data.endian, ifs)); break;
+            case INT:            value = static_cast<double>(ReadAndConvert<int>(volume_data.endian, ifs)); break;
+            case UNSIGNED_INT:   value = static_cast<double>(ReadAndConvert<unsigned int>(volume_data.endian, ifs)); break;
+            case FLOAT:          value = static_cast<double>(ReadAndConvert<float>(volume_data.endian, ifs)); break;
+            case DOUBLE:         value = ReadAndConvert<double>(volume_data.endian, ifs); break;
         }
         if(value > maximum) maximum = value;
         if(value < minimum) minimum = value;
 
-        temp_float_data.push_back(value);
+        temp_double_data.push_back(value);
     }
     cout<<endl<<"max: "<<maximum<<" min: "<<minimum<<endl;
+    volume_data.maximum = maximum; volume_data.minimum = minimum;
 
     volume_data.voxel_data.clear();
     
     // 將資料正規化到0~255
-    float range = maximum - minimum;
-    for(int i = 0; i < volume_data.size; i++) {
-        float normalized_data = ((temp_float_data[i] - minimum) / range) * 255.0f;
-        if(normalized_data < 0 || normalized_data > 255)
-            cout<<"錯了";
-        unsigned char data = static_cast<unsigned char>(normalized_data + 0.5f);
-        volume_data.voxel_data.push_back(data);
-        volume_data.intensity_counts[data]++;
-    }
+    if(isNormalized == true) {
+        double range = maximum - minimum;
+        for(int i = 0; i < volume_data.size; i++) {
+            double normalized_data = ((temp_double_data[i] - minimum) / range) * 255.0f;
+            if(normalized_data < 0 || normalized_data > 255)
+                cout<<"錯了";
+            unsigned char data = static_cast<unsigned char>(normalized_data + 0.5f);
+            volume_data.voxel_data.push_back(data);
+            volume_data.intensity_counts[data]++;
+        }
+    } else volume_data.voxel_data = temp_double_data;
     
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
@@ -240,92 +243,16 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data)
     return true;
 }
 
-VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename) {
-    VolumeData volume_data;
+VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename, bool isNormalized) {
+    VolumeData volume_data = {};
     if (!ReadInfFile(inf_filename, volume_data)) {
         cout<<"Reading inf file error"<<endl;
     }
-    if (!ReadRawFile(raw_filename, volume_data)) {
+    if (!ReadRawFile(raw_filename, volume_data, isNormalized)) {
         cout<<"Reading raw file error"<<endl;
     }
     return volume_data;
 }
-
-// VolumeData只是用來輔助儲存檔案資訊
-bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, DistanceFieldData &df_data) {
-    if(raw_filename == nullptr)
-    {
-        return false;
-    }
-    ifstream ifs(raw_filename, ios::in | ios::binary);
-    if (ifs.fail())
-    {
-        cout << "Failed to open raw file." << '\n';
-        return false;
-    }
-
-    auto start = steady_clock::now();
-    
-    df_data.file_name = volume_data.file_name;
-    df_data.width = volume_data.resolution[0];
-    df_data.height = volume_data.resolution[1];
-    df_data.depth = volume_data.resolution[2];
-    df_data.size = df_data.width * df_data.height * df_data.depth;
-
-    int x = df_data.width;
-    int y = df_data.height;
-    int z = df_data.depth;
-
-    int size = df_data.size; 
-
-    df_data.voxel_distance.clear();
-    df_data.voxel_distance.reserve(size);
-
-    float minimum = numeric_limits<float>::max();
-    float maximum = numeric_limits<float>::lowest();
-
-    // 根據不同inf的資訊決定怎麼讀並算最大最小值
-    for(int i = 0; i < size; i++) {
-        float value;
-
-        switch(volume_data.sample_type) {
-            case CHAR:           value = static_cast<float>(ReadAndConvert<char>(volume_data.endian, ifs)); break;
-            case UNSIGNED_CHAR:  value = static_cast<float>(ReadAndConvert<unsigned char>(volume_data.endian, ifs)); break;
-            case SHORT:          value = static_cast<float>(ReadAndConvert<short>(volume_data.endian, ifs)); break;
-            case UNSIGNED_SHORT: value = static_cast<float>(ReadAndConvert<unsigned short>(volume_data.endian, ifs)); break;
-            case INT:            value = static_cast<float>(ReadAndConvert<int>(volume_data.endian, ifs)); break;
-            case UNSIGNED_INT:   value = static_cast<float>(ReadAndConvert<unsigned int>(volume_data.endian, ifs)); break;
-            case FLOAT:          value = ReadAndConvert<float>(volume_data.endian, ifs); break;
-            case DOUBLE:         value = static_cast<float>(ReadAndConvert<double>(volume_data.endian, ifs)); break;
-        }
-        if(value > maximum) maximum = value;
-        if(value < minimum) minimum = value;
-
-        df_data.voxel_distance.push_back(value);
-    }
-    cout<<endl<<"maximum: "<<maximum<<" minimum: "<<minimum<<endl;
-    df_data.max_distance = maximum; df_data.min_distance = minimum;
-
-    auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀raw檔時間: "<<diff.count()<<" ms\n"<<endl;
-
-    return true;
-}
-
-
-DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename) {
-    VolumeData volume_data;
-    if (!ReadInfFile(inf_filename, volume_data)) {
-        cout<<"Reading inf file error"<<endl;
-    }
-    DistanceFieldData df_data;
-    if (!ReadRawFile(raw_filename, volume_data, df_data)) {
-        cout<<"Reading raw file error"<<endl;
-    }
-    return df_data;
-}
-
 
 // 最基本的資料平均方法
 vector<unsigned char> cumulativeDistributionEqualization(VolumeData volume_data) {
@@ -339,7 +266,7 @@ vector<unsigned char> cumulativeDistributionEqualization(VolumeData volume_data)
     for(int k = 0; k < depth; k++)
         for(int j = 0; j < height; j++)
             for(int i = 0; i < width; i++)
-                count[volume_data(i, j, k)]++;
+                count[(int)volume_data(i, j, k)]++;
     
     for(int i = 1; i < 256; i++)
         sumCount[i] += sumCount[i - 1] + count[i - 1];
@@ -349,7 +276,7 @@ vector<unsigned char> cumulativeDistributionEqualization(VolumeData volume_data)
     for(int k = 0; k < depth; k++)
         for(int j = 0; j < height; j++)
             for(int i = 0; i < width; i++)
-                equalized_data[volume_data.idx(i, j, k)] = sumCount[volume_data(i, j, k)];
+                equalized_data[volume_data.idx(i, j, k)] = sumCount[(int)volume_data(i, j, k)];
     cout<<"CDE finished！"<<endl;
     return equalized_data;
 }
@@ -769,7 +696,8 @@ void triangle2voxel(VolumeData &voxels, glm::vec3 v[3]) {
 
 // 可簡單判斷STL檔案格式是binary或ASCII
 VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
-    VolumeData stl_data;
+    VolumeData stl_data = {};
+    stl_data.sample_type = UNSIGNED_CHAR; // 最後只有0跟255
     for(int i = 0; i < 3; i++)  stl_data.resolution[i] = {RESOLUTION};
     stl_data.size = stl_data.resolution[0] * stl_data.resolution[1] * stl_data.resolution[2];
 
@@ -919,7 +847,8 @@ VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
 
 // 暫不處裡face有超過三個頂點的情況
 VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri) {
-    VolumeData obj_data;
+    VolumeData obj_data = {};
+    obj_data.sample_type = UNSIGNED_CHAR; // 最後只有0跟255
     for(int i = 0; i < 3; i++)  obj_data.resolution[i] = {RESOLUTION};
     obj_data.size = obj_data.resolution[0] * obj_data.resolution[1] * obj_data.resolution[2];
 
@@ -1008,7 +937,7 @@ VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
 }
 
 // 需先確保output檔案夾存在
-bool WriteDFInfFile(DistanceFieldData &df_data, string file_name) {
+bool WriteInfFile(VolumeData &volume_data, string file_name) {
     ofstream ofs("../../output/" + file_name + ".inf", ios::out);
     if(!ofs.is_open()) {
         cout<<"Faild to open inf file."<<endl;
@@ -1017,40 +946,139 @@ bool WriteDFInfFile(DistanceFieldData &df_data, string file_name) {
 
     ofs<<"raw-file="<<file_name + ".raw"<<endl;
     ofs<<"resolution="
-       <<df_data.width<<"x"
-       <<df_data.height<<"x"
-       <<df_data.depth<<endl;
-    ofs<<"sample-type="<<"double"<<endl; // 距離場目前都用Double存
+       <<volume_data.resolution[0]<<"x"
+       <<volume_data.resolution[1]<<"x"
+       <<volume_data.resolution[2]<<endl;
+    
+    string type;
+    switch (volume_data.sample_type) {
+        case CHAR:           type = "char"; break;
+        case UNSIGNED_CHAR:  type = "unsigned char"; break;
+        case SHORT:          type = "short"; break;
+        case UNSIGNED_SHORT: type = "unsigned short"; break;
+        case INT:            type = "int"; break;
+        case UNSIGNED_INT:   type = "unsigned int"; break;
+        case FLOAT:          type = "float"; break;
+        case DOUBLE:         type = "double"; break;
+        default:             type = "double"; break;
+    }
+    cout<<type<<endl;
+    ofs<<"sample-type="<<type<<endl; // 距離場目前都用Double存
+    ofs << "voxel-size="
+        << volume_data.voxel_size[0] << ":"
+        << volume_data.voxel_size[1] << ":"
+        << volume_data.voxel_size[2] << endl;
     ofs<<"endian=little"<<endl; // 預設都是little endian
-    ofs<<"Max="<<df_data.max_distance<<endl;
+    ofs<<"maximum="<<volume_data.maximum<<endl;
+    ofs<<"minimum="<<volume_data.minimum<<endl;
     ofs.close();
 
     return true;
 }
 
-bool WriteDFRawFile(DistanceFieldData &df_data, string file_name) {
+bool WriteRawFile(VolumeData &volume_data, string file_name) {
     ofstream ofs("../../output/" + file_name + ".raw", ios::out | ios::binary);
     if (!ofs.is_open()) {
         cout << "Failed to open raw file." << endl;
         return false;
     }
 
-    // 將所有 voxel 資料以二進位格式寫入
-    ofs.write(
-        reinterpret_cast<const char*>(df_data.voxel_distance.data()),
-        static_cast<streamsize>(df_data.voxel_distance.size()* sizeof(double))
-    );
+    // 根據 sample_type 將記憶體中的數值轉回對應型態並寫入二進位檔
+    for (int i = 0; i < volume_data.size; i++) {
+        double val = volume_data.voxel_data[i];
+
+        switch (volume_data.sample_type) {
+            case CHAR: {
+                char v = static_cast<char>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(char));
+                break;
+            }
+            case UNSIGNED_CHAR: {
+                unsigned char v = static_cast<unsigned char>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(unsigned char));
+                break;
+            }
+            case SHORT: {
+                short v = static_cast<short>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(short));
+                break;
+            }
+            case UNSIGNED_SHORT: {
+                unsigned short v = static_cast<unsigned short>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(unsigned short));
+                break;
+            }
+            case INT: {
+                int v = static_cast<int>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(int));
+                break;
+            }
+            case UNSIGNED_INT: {
+                unsigned int v = static_cast<unsigned int>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(unsigned int));
+                break;
+            }
+            case FLOAT: {
+                float v = static_cast<float>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(float));
+                break;
+            }
+            case DOUBLE: {
+                double v = static_cast<double>(val);
+                ofs.write(reinterpret_cast<const char*>(&v), sizeof(double));
+                break;
+            }
+        }
+    }
 
     ofs.close();
     
     return true;
 }
 
-void WriteDFVolumeFile( DistanceFieldData &df_data, string file_name) {
-    if (!WriteDFInfFile(df_data, file_name)) {
+void WriteVolumeFile(VolumeData &volume_data, string file_name) {
+    if (!WriteInfFile(volume_data, file_name)) {
         cout<<"Writing inf file error"<<endl;
     }
-    if (!WriteDFRawFile(df_data, file_name)) {
+    if (!WriteRawFile(volume_data, file_name)) {
         cout<<"Writing raw file error"<<endl;
     }
+}
+
+void showVolumeFileInfo(VolumeData &volume_data) {
+    cout<<"file name: "<<volume_data.file_name<<endl;
+    cout<<"resolution: "<<volume_data.resolution[0]<<"x"<<volume_data.resolution[1]<<"x"<<volume_data.resolution[2]<<endl;
+    cout<<"sample type: ";
+    switch (volume_data.sample_type) {
+        case CHAR: 
+            cout<<"char";
+            break;
+        case UNSIGNED_CHAR: 
+            cout<<"unsigned char";
+            break;
+        case SHORT: 
+            cout<<"short";
+            break;
+        case UNSIGNED_SHORT: 
+            cout<<"unsigned short";
+            break;
+        case INT: 
+            cout<<"int";
+            break;
+        case UNSIGNED_INT: 
+            cout<<"unsigned int";
+            break;
+        case FLOAT: 
+            cout<<"float";
+            break;
+        case DOUBLE: 
+            cout<<"double";
+            break;
+    } cout<<endl;
+    cout<<"endian: ";
+    if(volume_data.endian == LITTLE)
+        cout<<"little";
+    else cout<<"big";
+    cout<<endl;
+
 }

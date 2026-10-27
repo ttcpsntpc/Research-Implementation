@@ -10,18 +10,19 @@ bool DistanceField3D::isRangeValid(int i, int j, int k) {
     return (i >= 0 && i < width && j >= 0 && j < height && k >= 0 && k < depth);
 }
 
-DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points, int width, int height, int depth) {
-    DistanceFieldData df_data;
+VolumeData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>& points, int width, int height, int depth) {
+    VolumeData df_data = {};
+    df_data.sample_type = DOUBLE;
+    
     Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
-    max_distance = 0;
-    df_data.width = this->width = width;
-    df_data.height = this->height = height;
-    df_data.depth = this->depth = depth;
+    df_data.resolution[0] = this->width = width;
+    df_data.resolution[1] = this->height = height;
+    df_data.resolution[2] = this->depth = depth;
     df_data.size = width * height * depth;
 
-    df_data.voxel_distance.resize(width * height * depth);
+    df_data.voxel_data.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
     // initialize model's voxel
@@ -62,7 +63,6 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>
         int j = closest->j;
         int k = closest->k;
         voxel_state[idx(i, j, k)] = DONE;
-        max_distance = (closest->distance > max_distance) ? closest->distance : max_distance;
         delete closest;
         // update neighbors
         for(int dir = 0; dir < 6; dir++) {
@@ -104,26 +104,25 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<tuple<int, int, int>>
             }
         }
     }
-    df_data.max_distance = max_distance;
 
     // 最後判斷模型內外
-    determineInOut(df_data.voxel_distance);
+    determineInOut(df_data);
 
     return df_data;
 }
 
-DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth) {
-    DistanceFieldData df_data;
+VolumeData DistanceField3D::compute_LL(const VolumeData &volume_data) {
+    VolumeData df_data = volume_data;
+    df_data.sample_type = DOUBLE;
+
     Close_LL *close_list_header = nullptr;
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
-    max_distance = 0;
-    df_data.width = this->width = width;
-    df_data.height = this->height = height;
-    df_data.depth = this->depth = depth;
-    df_data.size = width * height * depth;
+    width = df_data.resolution[0];
+    height = df_data.resolution[1];
+    depth = df_data.resolution[2];
 
-    df_data.voxel_distance.resize(width * height * depth);
+    df_data.voxel_data.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
     auto start = steady_clock::now();
@@ -132,7 +131,7 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxel
     for(int i = 0; i < width; i++) {
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
-                if(voxels[idx(i, j, k)] == 255) {
+                if(volume_data.voxel_data[idx(i, j, k)] == 255) {
                     df_data(i, j, k) = 0;
                     voxel_state[idx(i, j, k)] = DONE;
                 }
@@ -171,7 +170,6 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxel
         int j = closest->j;
         int k = closest->k;
         voxel_state[idx(i, j, k)] = DONE;
-        max_distance = (closest->distance > max_distance) ? closest->distance : max_distance;
         delete closest;
         // update neighbors
         for(int dir = 0; dir < 6; dir++) {
@@ -204,15 +202,13 @@ DistanceFieldData DistanceField3D::compute_LL(const vector<unsigned char>& voxel
             }
         }
     }
-    df_data.max_distance = max_distance;
 
     // 最後判斷模型內外
-    determineInOut(df_data.voxel_distance);
+    determineInOut(df_data);
 
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     cout<<"距離場計算時間: "<<diff.count() / 1000<<"s"<<endl;
-    cout<<"最大距離值"<<max_distance<<endl;
 
     return df_data;
 }
@@ -239,17 +235,17 @@ void DistanceField3D::insertList(int i, int j, int k, double distance, Close_LL 
     }
 }
 
-DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth) {
-    DistanceFieldData df_data;
+VolumeData DistanceField3D::compute_PQ(const VolumeData &volume_data) {
+    VolumeData df_data = volume_data;
+    df_data.sample_type = DOUBLE;
+
     // 距離值沒必要初始化，主要用state判斷
     // initialize voxel state
-    max_distance = 0;
-    df_data.width = this->width = width;
-    df_data.height = this->height = height;
-    df_data.depth = this->depth = depth;
-    df_data.size = width * height * depth;
+    width = df_data.resolution[0];
+    height = df_data.resolution[1];
+    depth = df_data.resolution[2];
     
-    df_data.voxel_distance.resize(width * height * depth);
+    df_data.voxel_data.resize(width * height * depth);
     voxel_state.assign(width * height * depth, INITIAL);
     
     priority_queue<Close_PQ, vector<Close_PQ>, greater<Close_PQ>> Close_heap;
@@ -260,7 +256,7 @@ DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxel
     for(int i = 0; i < width; i++) {
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
-                if(voxels[idx(i, j, k)] == 255) {
+                if(volume_data.voxel_data[idx(i, j, k)] == 255) {
                     df_data(i, j, k) = 0;
                     voxel_state[idx(i, j, k)] = DONE;
                 }
@@ -304,7 +300,6 @@ DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxel
         }
 
         voxel_state[idx(i, j, k)] = DONE;
-        max_distance = (closest.distance > max_distance) ? closest.distance : max_distance;
         
         // update neighbors
         for(int dir = 0; dir < 6; dir++) {
@@ -333,20 +328,18 @@ DistanceFieldData DistanceField3D::compute_PQ(const vector<unsigned char>& voxel
             }
         }
     }
-    df_data.max_distance = max_distance;
 
     // 最後判斷模型內外
-    determineInOut(df_data.voxel_distance);
+    determineInOut(df_data);
     
     auto end = steady_clock::now();
     auto diff = duration_cast<milliseconds>(end - start);
     cout<<"距離場計算時間: "<<diff.count() / 1000<<"s"<<endl;
-    cout<<"最大距離值"<<max_distance<<endl;
 
     return df_data;
 }
 
-double DistanceField3D::computeDistance(DistanceFieldData &df_data, int i, int j, int k) {
+double DistanceField3D::computeDistance(VolumeData &df_data, int i, int j, int k) {
     double At[3], Bt[3], Ct[3], at[3], bt[3], ct[3], a, b, c, distance;
     for(int dir = 0; dir < 3; dir++) { // 0:x方向, 1:y方向, 2:z方向
         // 定義某個方向的左右兩個鄰居的索引v0和v2 (自己是v1)
@@ -443,9 +436,14 @@ bool DistanceField3D::isClose(int i, int j, int k) {
 }
 
 // 分辨內外距離，比如分別從x=0和x=width開始，往內走，並且把距離值乘上-1，如果遇到done就切換in/out狀態
-void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
+void DistanceField3D::determineInOut(VolumeData &df_data) {
+    vector<double> &voxel_data = df_data.voxel_data;
     vector<int> voxel_out_count = vector<int>(width * height * depth, 0); // 紀錄每個voxel被判斷為模型外部的次數
-    vector<double> voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
+    vector<double> voxel_temp1 = voxel_data, voxel_temp2 = voxel_data;
+
+    double max_distance = numeric_limits<double>::lowest();
+    double min_distance = numeric_limits<double>::max();
+
     // 做x方向的判斷
     for(int j = 0; j < height; j++) {
         for(int k = 0; k < depth; k++) {
@@ -453,10 +451,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int i = 0; i < width; i++) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i - 1, j, k) && voxel_distance[idx(i - 1, j, k)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i - 1, j, k) && voxel_data[idx(i - 1, j, k)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -483,10 +481,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int i = width - 1; i >= 0; i--) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i + 1, j, k) && voxel_distance[idx(i + 1, j, k)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i + 1, j, k) && voxel_data[idx(i + 1, j, k)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -508,7 +506,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
         }
     }
     
-    voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
+    voxel_temp1 = voxel_data, voxel_temp2 = voxel_data;
     // 做y方向的判斷
     for(int k = 0; k < depth; k++) {
         for(int i = 0; i < width; i++) {
@@ -516,10 +514,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int j = 0; j < height; j++) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i, j - 1, k) && voxel_distance[idx(i, j - 1, k)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i, j - 1, k) && voxel_data[idx(i, j - 1, k)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -546,10 +544,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int j = height - 1; j >= 0; j--) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i, j + 1, k) && voxel_distance[idx(i, j + 1, k)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i, j + 1, k) && voxel_data[idx(i, j + 1, k)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -571,7 +569,7 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
         }
     }
 
-    voxel_temp1 = voxel_distance, voxel_temp2 = voxel_distance;
+    voxel_temp1 = voxel_data, voxel_temp2 = voxel_data;
     // 做z方向的判斷
     for(int i = 0; i < width; i++) {
         for(int j = 0; j < height; j++) {
@@ -579,10 +577,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int k = 0; k < depth; k++) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i, j, k - 1) && voxel_distance[idx(i, j, k - 1)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i, j, k - 1) && voxel_data[idx(i, j, k - 1)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -609,10 +607,10 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
             bool is_out = true;
             for(int k = depth - 1; k >= 0; k--) {
                   // 遇到模型就切換
-                if(voxel_distance[idx(i, j, k)] == 0 && isRangeValid(i, j, k + 1) && voxel_distance[idx(i, j, k + 1)] != 0) { // 遇到模型就切換
+                if(voxel_data[idx(i, j, k)] == 0 && isRangeValid(i, j, k + 1) && voxel_data[idx(i, j, k + 1)] != 0) { // 遇到模型就切換
                     is_out = !is_out;
                     continue;
-                } else if(voxel_distance[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
+                } else if(voxel_data[idx(i, j, k)] == 0) continue; // 第二次以後碰到模型直接跳過
 
                 if(!is_out) { // 到內部時先判斷鄰居是不是外部，只要有一個是外部就視為外部
                     int dir;
@@ -639,8 +637,18 @@ void DistanceField3D::determineInOut(vector<double> &voxel_distance) {
         for(int j = 0; j < height; j++) {
             for(int k = 0; k < depth; k++) {
                 if(voxel_out_count[idx(i, j, k)] >= 4)
-                    voxel_distance[idx(i, j, k)] = -voxel_distance[idx(i, j, k)];
+                    voxel_data[idx(i, j, k)] = -voxel_data[idx(i, j, k)];
+                
+                if(voxel_data[idx(i, j, k)] > max_distance)
+                    max_distance = voxel_data[idx(i, j, k)];
+                else if(voxel_data[idx(i, j, k)] < min_distance)
+                    min_distance = voxel_data[idx(i, j, k)];
             }
         }
     }
+
+    df_data.maximum = max_distance;
+    df_data.minimum = min_distance;
+    cout<<"最外層距離值"<<min_distance<<endl;
+    cout<<"最內層距離值"<<max_distance<<endl;
 }

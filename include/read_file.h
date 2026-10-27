@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <algorithm>
 #include "vertex.h"
-#include "distance_field_3D.h"
 using namespace std;
 
 #define RESOLUTION 64 // 預設regular grid大小
@@ -49,18 +48,19 @@ struct VolumeData {
     SampleType sample_type;
     glm::vec3 voxel_size;
     EndianType endian = LITTLE;
-    glm::vec3 max, min;
+    glm::vec3 max, min; // 實際位置最大值
+    double maximum, minimum; // 最大值
 
     // struct RawData {} volume_data;
     int size; // 幾個voxels
     int intensity_counts[256] = {0};
-    vector<unsigned char> voxel_data; // 真正存放體素資料
+    vector<double> voxel_data; // 真正存放體素資料
 
     int idx(int i, int j, int k) const {
         return k * resolution[0] * resolution[1] + j * resolution[0] + i;
     }
     
-    inline unsigned char& operator()(int i, int j, int k) {
+    inline double& operator()(int i, int j, int k) {
         return voxel_data[idx(i, j, k)];
     }
 };
@@ -74,12 +74,9 @@ struct TxtData {
 
 
 ///// 讀各種檔案 /////
-VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename); // 讀一般unsigned char的體素資料
+VolumeData ReadVolumeFile(const char *inf_filename, const char *raw_filename, bool isNormalized); // 讀一般unsigned char的體素資料
 bool ReadInfFile(const char *inf_filename, VolumeData &volume_data);
-bool ReadRawFile(const char *raw_filename, VolumeData &volume_data);
-
-DistanceFieldData ReadDFVolumeFile(const char *inf_filename, const char *raw_filename); // 讀距離場 (double) 的體素資料
-bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, DistanceFieldData &df_data);
+bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, bool isNormalized);
 
 VecData ReadVecFile(const char *vec_filename);
 TxtData ReadTxtFile(const char *txt_filename);
@@ -97,8 +94,11 @@ vector<unsigned char> adaptiveHistogramEqualization(VolumeData &volume_data, int
 vector<unsigned char> CLAHE(VolumeData &volume_data, int block_edge, float threshold);
 
 ///// 寫各種檔案 /////
-void WriteDFVolumeFile(DistanceFieldData &df_data, string file_name); // 讀距離場的體素資料 // 因為計算距離場後的DistanceFieldData不會有檔名，所以在這邊加，可改進
-bool WriteDFInfFile(DistanceFieldData &df_data, string file_name);
-bool WriteDFRawFile(DistanceFieldData &df_data, string file_name);
+void WriteVolumeFile(VolumeData &volume_data, string file_name); 
+bool WriteInfFile(VolumeData &volume_data, string file_name);
+bool WriteRawFile(VolumeData &volume_data, string file_name);
+
+///// 其他 /////
+void showVolumeFileInfo(VolumeData &volume_data);
 
 #endif

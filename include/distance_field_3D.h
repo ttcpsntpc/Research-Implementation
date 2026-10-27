@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
+#include "read_file.h"
 using namespace std;
 
 /*
@@ -23,22 +24,22 @@ using namespace std;
     getMaxDistance()可以得到距離場中最大的距離值
 */
 
-struct DistanceFieldData {
-    string file_name;
-    int width, height, depth; 
-    int size;
-    double max_distance, min_distance; // 不論內外的最大值
+// struct DistanceFieldData {
+//     string file_name;
+//     int width, height, depth; 
+//     int size;
+//     double max_distance, min_distance; // 不論內外的最大值
     
-    vector<double> voxel_distance;
+//     vector<double> voxel_distance;
     
-    int idx(int i, int j, int k) const {
-        return k * width * height + j * width + i;
-    }
+//     int idx(int i, int j, int k) const {
+//         return k * width * height + j * width + i;
+//     }
     
-    inline double& operator()(int i, int j, int k) {
-        return voxel_distance[idx(i, j, k)];
-    }
-};
+//     inline double& operator()(int i, int j, int k) {
+//         return voxel_distance[idx(i, j, k)];
+//     }
+// };
 
 enum VoxelState {
     INITIAL, DONE, CLOSE, FAR
@@ -66,13 +67,12 @@ public:
     ~DistanceField3D() {};
 
     // main function to compute distance field
-    DistanceFieldData compute_LL(const vector<std::tuple<int, int, int>>& points, int width, int height, int depth); // 可忽略，初步測試用
-    DistanceFieldData compute_LL(const vector<unsigned char>& voxels, int width, int height, int depth); // 用linked list計算距離場
-    DistanceFieldData compute_PQ(const vector<unsigned char>& voxels, int width, int height, int depth); // 用priority queue計算距離場
+    VolumeData compute_LL(const vector<std::tuple<int, int, int>>& points, int width, int height, int depth); // 可忽略，初步測試用
+    VolumeData compute_LL(const VolumeData &volume_data); // 用linked list計算距離場
+    VolumeData compute_PQ(const VolumeData &volume_data); // 用priority queue計算距離場
 
 private:
     int width, height, depth; 
-    double max_distance;
     int size; // 幾個voxels
     
     vector<VoxelState> voxel_state;
@@ -81,10 +81,10 @@ private:
 
     bool isRangeValid(int i, int j, int k);
     void insertList(int i, int j, int k, double distance, Close_LL *&close_list_header); // for LL
-    double computeDistance(DistanceFieldData &df_data, int i, int j, int k);
+    double computeDistance(VolumeData &df_data, int i, int j, int k);
     bool isClose(int i, int j, int k);
     int idx(int i, int j, int k) { return i + j * width + k * width * height; }
-    void determineInOut(vector<double> &voxel_distance);
+    void determineInOut(VolumeData &df_data);
 };
 
 #endif

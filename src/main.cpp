@@ -51,7 +51,8 @@ float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
 vector<Vertex_c> vertices_tri;
-VolumeData volume_data = ReadObjFile("../../raw/teapot.obj", &vertices_tri);
+// (1) 讓BB對齊學姊DF的大小
+// VolumeData volume_data = ReadObjFile("../../raw/teapot.obj", &vertices_tri); 
 DistanceField3D DF;
 UIManager UI;
 
@@ -125,29 +126,32 @@ int main()
     Object_c Object_tri;
     Object_tri.CreateObject(vertices_tri, {});
 
-    Object_c object_bi_voxel;
-    object_bi_voxel.CreateObject(vertices[5], {});
+    // (1)
+    // Object_c object_bi_voxel;
+    // object_bi_voxel.CreateObject(vertices[5], {});
 
-    vector<glm::vec3> cube_pos;
-    for(int i = 0; i < volume_data.resolution[0]; i++)
-        for(int j = 0; j < volume_data.resolution[1]; j++)
-            for(int k = 0; k < volume_data.resolution[2]; k++) 
-                if(volume_data(i, j, k)==255)
-                    cube_pos.push_back({i, j, k});
-    cout<<"Model voxel size: "<<cube_pos.size()<<endl;
-    object_bi_voxel.UpdateInstances(cube_pos);
+    // vector<glm::vec3> cube_pos; 
+    // for(int i = 0; i < volume_data.resolution[0]; i++)
+    //     for(int j = 0; j < volume_data.resolution[1]; j++)
+    //         for(int k = 0; k < volume_data.resolution[2]; k++) 
+    //             if(volume_data(i, j, k)==255)
+    //                 cube_pos.push_back({i, j, k});
+    // cout<<"Model voxel size: "<<cube_pos.size()<<endl;
+    // object_bi_voxel.UpdateInstances(cube_pos);
 
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
     // DistanceFieldData df_data = DF.compute_PQ(volume_data.voxel_data, volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]);
-    DistanceFieldData df_data = ReadDFVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw"); // 學姊的
+    VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
 
     UI.init();
 
-    double max_range = max(volume_data.max.x - volume_data.min.x, max(volume_data.max.y - volume_data.min.y, volume_data.max.z - volume_data.min.z));
+    double max_range = max(df_data.max.x - df_data.min.x, max(df_data.max.y - df_data.min.y, df_data.max.z - df_data.min.z)) + 50;
     glm::vec3 ratio(512 / max_range); // 顯示時統一縮放到一定範圍
     int distance_range = 0;
+
+
     bool is_draw_bi_voxels = false, is_draw_df_voxels = false, is_draw_model_triangles = false, is_draw_bounding_box = true;
 
     // render loop
@@ -174,19 +178,19 @@ int main()
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
         ImGui::Begin("GUI");
-        ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.min_distance - 1), (int)df_data.max_distance + 1);
+        ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
         if(ImGui::Button("update voxels")) {
             vector<glm::vec3> cube_pos;
-            for(int i = 0; i < df_data.width; i++)
-                for(int j = 0; j < df_data.height; j++)
-                    for(int k = 0; k < df_data.depth; k++) 
+            for(int i = 0; i < df_data.resolution[0]; i++)
+                for(int j = 0; j < df_data.resolution[1]; j++)
+                    for(int k = 0; k < df_data.resolution[2]; k++) 
                         if(df_data(i, j, k) > distance_range - 0.5 && df_data(i, j, k) < distance_range + 0.5)
                             cube_pos.push_back({i, j, k});
-            cout<<"distance:"<<distance_range<<" voxel size: "<<cube_pos.size()<<endl;
+            cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        ImGui::Checkbox("draw model triangles", &is_draw_model_triangles);
-        ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
+        // ImGui::Checkbox("draw model triangles", &is_draw_model_triangles); (1)
+        // ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
 
@@ -218,30 +222,31 @@ int main()
         // shader.setMat4("model", model);
         // glDrawArrays(GL_TRIANGLES, 0, cube.size);
         
+        // (1)
         // 畫模型的三角片
-        if(is_draw_model_triangles) {
-            glBindVertexArray(Object_tri.VAO_);
-            model = glm::mat4(1.0f); 
-            model = glm::scale(model, ratio);
-            model = glm::translate(model, -volume_data.min);
-            light_shader.setMat4("model", model);
-            glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
-        }
+        // if(is_draw_model_triangles) {
+        //     glBindVertexArray(Object_tri.VAO_);
+        //     model = glm::mat4(1.0f); 
+        //     model = glm::scale(model, ratio);
+        //     model = glm::translate(model, -volume_data.min);
+        //     light_shader.setMat4("model", model);
+        //     glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
+        // }
 
-        // 畫Voxels
-        if(is_draw_bi_voxels) {
-            glBindVertexArray(object_bi_voxel.VAO_);
-            model = glm::mat4(1.0f);
-            model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2])); // 因為存位置時是直接用index存，需轉換成實際體素大小
-            model = glm::scale(model, ratio);
-            light_shader.setMat4("model", model);
-            glDrawArraysInstanced(GL_TRIANGLES, 0, object_bi_voxel.size, object_bi_voxel.instanceCount); 
-        }
+        // 畫binary voxels
+        // if(is_draw_bi_voxels) {
+        //     glBindVertexArray(object_bi_voxel.VAO_);
+        //     model = glm::mat4(1.0f);
+        //     model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2])); // 因為存位置時是直接用index存，需轉換成實際體素大小
+        //     model = glm::scale(model, ratio);
+        //     light_shader.setMat4("model", model);
+        //     glDrawArraysInstanced(GL_TRIANGLES, 0, object_bi_voxel.size, object_bi_voxel.instanceCount); 
+        // }
 
         if(is_draw_df_voxels) {
             glBindVertexArray(object_df_voxel.VAO_);
             model = glm::mat4(1.0f);
-            model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+            model = glm::scale(model, glm::vec3(df_data.voxel_size[0], df_data.voxel_size[1], df_data.voxel_size[2]));
             model = glm::scale(model, ratio);
             light_shader.setMat4("model", model);
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_df_voxel.size, object_df_voxel.instanceCount); 
@@ -279,8 +284,8 @@ int main()
             light_shader.setFloat("opacity", 0.5f);
             glBindVertexArray(cube.VAO_);
             model = glm::mat4(1.0f);
-            model = glm::scale(model, glm::vec3(volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]));
-            model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2]));
+            model = glm::scale(model, glm::vec3(df_data.resolution[0], df_data.resolution[1], df_data.resolution[2]));
+            model = glm::scale(model, glm::vec3(df_data.voxel_size[0], df_data.voxel_size[1], df_data.voxel_size[2]));
             model = glm::scale(model, ratio);
             light_shader.setMat4("model", model);
             glDrawArrays(GL_TRIANGLES, 0, cube.size);
@@ -376,7 +381,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 int Create3DVoxelTexture(VolumeData volume_data)
 {
-    vector<unsigned char> voxel_data = volume_data.voxel_data;
+    vector<double> voxel_data = volume_data.voxel_data; // ! Warning: 最後是以unsgiend char儲存的
     int x = volume_data.resolution[0]; 
     int y = volume_data.resolution[1];
     int z = volume_data.resolution[2]; 

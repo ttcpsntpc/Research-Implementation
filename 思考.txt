@@ -1,0 +1,7 @@
+* 讀進df data (保留)
+* 選取雕刻層
+texture mapping到distance=0
+	另外儲存distance=0的voxels
+	需存原始index、
+透過gradient傳播距離值
+將每個
