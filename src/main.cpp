@@ -147,8 +147,11 @@ int main()
 
     UI.init();
 
-    double max_range = max(df_data.max.x - df_data.min.x, max(df_data.max.y - df_data.min.y, df_data.max.z - df_data.min.z)) + 50;
-    glm::vec3 ratio(512 / max_range); // 顯示時統一縮放到一定範圍
+    // 顯示時統一縮放到一定範圍
+    // 將(解析度 * voxel size)最高的那側作為分母縮放到512大小 並乘以voxel size
+    double max_range = max(df_data.resolution[0] * df_data.voxel_size[0], max(df_data.resolution[1] * df_data.voxel_size[1], df_data.resolution[2] * df_data.voxel_size[2]));
+    glm::vec3 ratio(512 / max_range); 
+    ratio *= df_data.voxel_size;
     int distance_range = 0;
 
 
@@ -246,9 +249,9 @@ int main()
         if(is_draw_df_voxels) {
             glBindVertexArray(object_df_voxel.VAO_);
             model = glm::mat4(1.0f);
-            model = glm::scale(model, glm::vec3(df_data.voxel_size[0], df_data.voxel_size[1], df_data.voxel_size[2]));
             model = glm::scale(model, ratio);
-            light_shader.setMat4("model", model);
+            shader.setMat4("model", model);
+            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_df_voxel.size, object_df_voxel.instanceCount); 
         }
 
@@ -285,7 +288,6 @@ int main()
             glBindVertexArray(cube.VAO_);
             model = glm::mat4(1.0f);
             model = glm::scale(model, glm::vec3(df_data.resolution[0], df_data.resolution[1], df_data.resolution[2]));
-            model = glm::scale(model, glm::vec3(df_data.voxel_size[0], df_data.voxel_size[1], df_data.voxel_size[2]));
             model = glm::scale(model, ratio);
             light_shader.setMat4("model", model);
             glDrawArrays(GL_TRIANGLES, 0, cube.size);

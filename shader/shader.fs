@@ -11,13 +11,13 @@ uniform sampler1D texture2;
 
 uniform vec3 lightPos;
 uniform vec3 viewPos;
+uniform vec3 color;
 
-// function prototypes
 vec3 PhongShading(vec3 gradient,vec3 color);
 
 void main(){
     vec3 P = FragPos;
-    vec3 Color = PhongShading(Normal, ourColor);
+    vec3 Color = PhongShading(Normal, color);
     FragColor = vec4(Color, 1.0f);
     // sol. 1
     //FragColor = vec4(PhongShading(Normal), 1.0f);

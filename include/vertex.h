@@ -70,5 +70,6 @@ public:
 
 extern Vertex_c vertex;
 extern std::vector<std::vector<Vertex_c>> vertices;
+extern std::vector<std::vector<Vertex_c>> cube_face_vertices;
 
 #endif
