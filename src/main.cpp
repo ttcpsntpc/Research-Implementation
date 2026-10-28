@@ -35,11 +35,12 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
 
-int Create3DVoxelTexture(VolumeData volume_data);
+// extra function
+vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Vertex_c> &vertex); 
 
 // settings
-const unsigned int SCR_WIDTH = 1000;
-const unsigned int SCR_HEIGHT = 750;
+const unsigned int SCR_WIDTH = 1600;
+const unsigned int SCR_HEIGHT = 900;
 
 // Camera
 Camera_c camera(glm::vec3(100.0f, 100.0f, 500.0f));
@@ -142,8 +143,12 @@ int main()
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
-    // DistanceFieldData df_data = DF.compute_PQ(volume_data.voxel_data, volume_data.resolution[0], volume_data.resolution[1], volume_data.resolution[2]);
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
+    // 取得體素表面頂點
+    vector<Vertex_c> voxel_vertex;
+    extractModelSurface(false, df_data, voxel_vertex);
+    Object_c object_model;
+    object_model.CreateObject(voxel_vertex, {});
 
     UI.init();
 
@@ -192,7 +197,7 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        // ImGui::Checkbox("draw model triangles", &is_draw_model_triangles); (1)
+        ImGui::Checkbox("draw model triangles", &is_draw_model_triangles); //(1)
         // ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
@@ -227,14 +232,15 @@ int main()
         
         // (1)
         // 畫模型的三角片
-        // if(is_draw_model_triangles) {
-        //     glBindVertexArray(Object_tri.VAO_);
-        //     model = glm::mat4(1.0f); 
-        //     model = glm::scale(model, ratio);
-        //     model = glm::translate(model, -volume_data.min);
-        //     light_shader.setMat4("model", model);
-        //     glDrawArrays(GL_TRIANGLES, 0, Object_tri.size);
-        // }
+        if(is_draw_model_triangles) {
+            glBindVertexArray(object_model.VAO_);
+            model = glm::mat4(1.0f); 
+            model = glm::scale(model, ratio);
+            shader.setMat4("model", model);
+            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            glDrawArrays(GL_TRIANGLES, 0, object_model.size);
+            cout<<object_model.size;
+        }
 
         // 畫binary voxels
         // if(is_draw_bi_voxels) {
@@ -381,60 +387,58 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-int Create3DVoxelTexture(VolumeData volume_data)
-{
-    vector<double> voxel_data = volume_data.voxel_data; // ! Warning: 最後是以unsgiend char儲存的
-    int x = volume_data.resolution[0]; 
-    int y = volume_data.resolution[1];
-    int z = volume_data.resolution[2]; 
+// 找模型表面體素，作為SOM的input並取得繪製體素的表面
+vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Vertex_c> &vertex) {
+    vector<glm::vec3> input_vector;
     
-    unsigned char *texture_data = new unsigned char[x * y * z * 4];
+    // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
+    auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, int x_offset, int y_offset, int z_offset) {
+        size_t old_size = vertex.size();
+        vertex.insert(vertex.end(), face_vertices.begin(), face_vertices.end());
+        size_t new_size = vertex.size();
+        
+        for(size_t v = old_size; v < new_size; v++) {
+            vertex[v].position.x += x_offset;
+            vertex[v].position.y += y_offset;
+            vertex[v].position.z += z_offset;
+        }
+    };
 
-    for(int k = 0; k < z; k++)         
-        for(int j = 0; j < y; j++)
-            for(int i = 0; i < x; i++)  
-            {
-                int idx = (k * y * x + j * x + i) * 4;
-                
-                // gradient x
-                if(i == 0)
-                    texture_data[idx + 0] = (voxel_data[volume_data.idx(i + 1, j, k)] - voxel_data[volume_data.idx(i, j, k)]) / volume_data.voxel_size[0];
-                else if(i == x - 1)
-                    texture_data[idx + 0] = (voxel_data[volume_data.idx(i, j, k)] - voxel_data[volume_data.idx(i - 1, j, k)]) / volume_data.voxel_size[0];
-                else 
-                    texture_data[idx + 0] = (voxel_data[volume_data.idx(i + 1, j, k)] - voxel_data[volume_data.idx(i - 1, j, k)]) / (2 * volume_data.voxel_size[0]);
+    for(int i = 0; i < df_data.resolution[0]; i++) {
+        for(int j = 0; j < df_data.resolution[1]; j++) {
+            for(int k = 0; k < df_data.resolution[2]; k++) {
+                if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣
+                    bool isInput = false;
+                    if((i == 0) || (df_data(i - 1, j, k)) != 0) { // -x
+                        insertAndOffsetFace(cube_face_vertices[0], i, j, k);
+                        isInput = true;
+                    }
+                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != 0) { // +x
+                        insertAndOffsetFace(cube_face_vertices[1], i, j, k);
+                        isInput = true;
+                    }
+                    if((j == 0) || (df_data(i, j - 1, k)) != 0) { // -y
+                        insertAndOffsetFace(cube_face_vertices[2], i, j, k);
+                        isInput = true;
+                    }
+                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != 0) { // +y
+                        insertAndOffsetFace(cube_face_vertices[3], i, j, k);
+                        isInput = true;
+                    }
+                    if((k == 0) || (df_data(i, j, k - 1)) != 0) { // -z
+                        insertAndOffsetFace(cube_face_vertices[4], i, j, k);
+                        isInput = true;
+                    }
+                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != 0) { // +z
+                        insertAndOffsetFace(cube_face_vertices[5], i, j, k);
+                        isInput = true;
+                    }
 
-                // gradient y
-                if(j == 0)
-                    texture_data[idx + 1] = (voxel_data[volume_data.idx(i, j + 1, k)] - voxel_data[volume_data.idx(i, j, k)]) / volume_data.voxel_size[1];
-                else if(j == y - 1)
-                    texture_data[idx + 1] = (voxel_data[volume_data.idx(i, j, k)] - voxel_data[volume_data.idx(i, j - 1, k)]) / volume_data.voxel_size[1];
-                else 
-                    texture_data[idx + 1] = (voxel_data[volume_data.idx(i, j + 1, k)] - voxel_data[volume_data.idx(i, j - 1, k)]) / (2 * volume_data.voxel_size[1]);
-
-                // gradient z 
-                if(k == 0)
-                    texture_data[idx + 2] = (voxel_data[volume_data.idx(i, j, k + 1)] - voxel_data[volume_data.idx(i, j, k)]) / volume_data.voxel_size[2];
-                else if(k == z - 1)
-                    texture_data[idx + 2] = (voxel_data[volume_data.idx(i, j, k)] - voxel_data[volume_data.idx(i, j, k - 1)]) / volume_data.voxel_size[2];
-                else 
-                    texture_data[idx + 2] = (voxel_data[volume_data.idx(i, j, k + 1)] - voxel_data[volume_data.idx(i, j, k - 1)]) / (2 * volume_data.voxel_size[2]);
-
-                // intensity
-                texture_data[idx + 3] = voxel_data[volume_data.idx(i, j, k)];
+                    if(isSOM && isInput)
+                        input_vector.push_back(glm::vec3(i, j, k));
+                }
             }
-
-    unsigned int texID;
-    glGenTextures(1, &texID);
-    glBindTexture(GL_TEXTURE_3D, texID);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // 注意這裡 x 和 z 換位後也要改
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, x, y, z, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data);
-
-    return texID;
+        }
+    }
+    return input_vector;
 }
