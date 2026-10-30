@@ -1,7 +1,16 @@
 * 讀進df data (保留)
-* 選取雕刻層
-texture mapping到distance=0
+* 選取雕刻層和範圍
+* SOM
+可選lattice，跳出網格選取5個anchor points (預設六面體，貼圖不扭曲)
+initial texcoord and SOM position by range of input data
+training: (position and texcoord one by one)
+	initial parameters
+	run repeated
+	done
+
+* texture mapping
+到distance=0
 	另外儲存distance=0的voxels
 	需存原始index、
 透過gradient傳播距離值
-將每個
+

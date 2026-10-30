@@ -39,8 +39,8 @@ void processInput(GLFWwindow *window);
 vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Vertex_c> &vertex); 
 
 // settings
-const unsigned int SCR_WIDTH = 1600;
-const unsigned int SCR_HEIGHT = 900;
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_HEIGHT = 720;
 
 // Camera
 Camera_c camera(glm::vec3(100.0f, 100.0f, 500.0f));
@@ -201,6 +201,88 @@ int main()
         // ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
+        
+        
+        struct GridPoint {
+    int x, y;
+    // 讓 vector 可以去重或搜尋
+    bool operator==(const GridPoint& other) const { return x == other.x && y == other.y; }
+};
+
+// 模擬全域或類別成員變數，用來儲存已選取的點
+static std::vector<GridPoint> selected_points;
+
+// 網格設定
+const float GRID_SIZE = 40.0f;       // 每個網格的大小（像素）
+const float POINT_RADIUS = 6.0f;     // 節點點擊視覺反饋的半徑
+const int GRID_COLS = 15;            // 網格總欄數
+const int GRID_ROWS = 15;            // 網格總列數
+
+// 開始 ImGui 視窗
+ImGui::Begin("互動網格畫布");
+
+// 1. 定義一個隱形的自訂元件作為畫布，用來捕捉滑鼠事件
+ImVec2 canvas_pos = ImGui::GetCursorScreenPos();       // 畫布左上角在螢幕上的絕對坐標
+ImVec2 canvas_size(GRID_COLS * GRID_SIZE, GRID_ROWS * GRID_SIZE); // 畫布總大小
+ImGui::InvisibleButton("canvas", canvas_size);          // 建立一個隱形按鈕佔位
+
+// 取得當前視窗的繪圖列表
+ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+// 2. 繪製網格背景線
+ImU32 grid_color = IM_COL32(200, 200, 200, 40); // 淺灰色，帶透明度
+for (int i = 0; i <= GRID_COLS; i++) {
+    float x = canvas_pos.x + i * GRID_SIZE;
+    draw_list->AddLine(ImVec2(x, canvas_pos.x), ImVec2(x, canvas_pos.y + canvas_size.y), grid_color);
+}
+for (int j = 0; j <= GRID_ROWS; j++) {
+    float y = canvas_pos.y + j * GRID_SIZE;
+    draw_list->AddLine(ImVec2(canvas_pos.x, y), ImVec2(canvas_pos.x + canvas_size.x, y), grid_color);
+}
+
+// 3. 處理滑鼠點擊偵測
+if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+{
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    
+    // 計算滑鼠相對於畫布左上角的偏移量
+    float local_x = mouse_pos.x - canvas_pos.x;
+    float local_y = mouse_pos.y - canvas_pos.y;
+
+    // 四捨五入到最近的網格交叉點坐標 (Grid Coordinates)
+    int grid_x = (int)std::round(local_x / GRID_SIZE);
+    int grid_y = (int)std::round(local_y / GRID_SIZE);
+
+    // 確保在合法網格範圍內
+    if (grid_x >= 0 && grid_x <= GRID_COLS && grid_y >= 0 && grid_y <= GRID_ROWS)
+    {
+        GridPoint clicked_p = { grid_x, grid_y };
+        
+        // 檢查是否已經選取過：若有則取消選取（Toggle），若無則加入
+        auto it = std::find(selected_points.begin(), selected_points.end(), clicked_p);
+        if (it != selected_points.end()) {
+            selected_points.erase(it); // 取消選取
+        } else {
+            selected_points.push_back(clicked_p); // 新增選取
+        }
+    }
+}
+
+// 4. 繪製所有已被選取的點
+ImU32 select_color = IM_COL32(255, 99, 71, 255); // 鮮豔的番茄紅
+for (const auto& p : selected_points)
+{
+    // 將網格坐標還原為螢幕絕對像素坐標
+    float screen_x = canvas_pos.x + p.x * GRID_SIZE;
+    float screen_y = canvas_pos.y + p.y * GRID_SIZE;
+    
+    // 在交叉點上畫一個實心圓形
+    draw_list->AddCircleFilled(ImVec2(screen_x, screen_y), POINT_RADIUS, select_color);
+}
+
+ImGui::End();
+
+
 
 
         ImGui::End();
@@ -239,7 +321,6 @@ int main()
             shader.setMat4("model", model);
             shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArrays(GL_TRIANGLES, 0, object_model.size);
-            cout<<object_model.size;
         }
 
         // 畫binary voxels
