@@ -7,6 +7,7 @@
 #include <thread>
 #include <vector>
 #include <limits>
+#include <ramdon>
 
 using namespace std;
 
@@ -21,7 +22,7 @@ enum LatticesType {
 //   5          front
 struct SomData {
     int resolution[3]; // width height slice
-    vector<glm::vec2> texcoord;
+    vector<glm::vec3> texcoord; // r coordinate用不到 // 方便find BMU function的統一
     vector<glm::vec3> pos;
 
     SomData(int width, int height) {
@@ -32,7 +33,7 @@ struct SomData {
         texcoord.resize(resolution[0] * resolution[1] * resolution[2]); // 應該就不變了
         pos.resize(resolution[0] * resolution[1] * resolution[2]); // 若改成donut就會改變
     };
-
+    
     int idx(int i, int j) const { 
         return j * resolution[0] + i; 
     }
@@ -40,7 +41,7 @@ struct SomData {
         return k * resolution[0] * resolution[1] + j * resolution[0] + i;
     }
 
-    inline glm::vec2& operator()(int i, int j) {
+    inline glm::vec3& operator()(int i, int j) {
         return texcoord[idx(i, j)];
     }
     inline glm::vec3& operator()(int i, int j, int k) {
@@ -59,10 +60,11 @@ public:
 
     double radius_init, radius_now;
 
-    LatticesType lattice_type = CUBE;
+    LatticesType lattice_type = CUBE; // 如果是訓練texture就一律設定為SQUARE
     
     void initiateParameters(SomData &som_data);
     void createLattices(vector<glm::ivec3> &pos_data, SomData &som_data);
+    glm::ivec3 findBMU(vector<glm::vec3> data, glm::vec3 input_vector);
 };
 
 // 切換訓練種類時要呼叫
@@ -85,6 +87,7 @@ void SOM::createLattices(vector<glm::ivec3> &pos_data, SomData &som_data) {
     glm::vec3 center = glm::vec3(min.x + size.x / 2, min.y, min.z + size.z / 2);
     double x, y, z;
 
+    // initial position
     if(lattice_type == SQUARE) { // 初始化於max z上的面
         double x_gap = size.x / (resolution[0] - 1);
         double z_gap = size.z / (resolution[1] - 1);
@@ -173,101 +176,65 @@ void SOM::createLattices(vector<glm::ivec3> &pos_data, SomData &som_data) {
         }
     } 
     else cout<<"invalid lattices type number: "<<lattice_type<<endl;
+
+    // initial texcoord
+    static random_device rd;
+    static std::mt19937 gen(rd());
+    uniform_real_distribution<double> dis(0.0, 1.0);
+
+    for(int j = 0; j < resolution[1]; j++) {
+        for(int i = 0; i < resolution[0]; i++) {
+            som(i, j) = glm::vec3(dis(gen), dis(gen), 0.0f);
+        }
+    }
 }
 
-void CreateCylindricalMesh(int resolution, glm::vec3 max, glm::vec3 min);
-glm::ivec2 FindBMU(glm::vec3 input_vector, int resolution);
+// 遍歷mesh找出BMU，距離最小的神經元index
+glm::ivec3 SOM::findBMU(vector<glm::vec3> data, glm::vec3 input_vector)
+{
+    int k = 1;
+    double minimum_distance = std::numeric_limits<double>::max();
+    glm::ivec3 winner(0, 0, 0);
+    
+    static random_device rd;
+    static mt19937 gen(rd());
+    uniform_real_distribution<> dis(0.0, 1.0);
+
+    for(int k = 0; k < resolution[2]; k++) {
+        for(int j = 0; j < resolution[1]; j++) {
+            for(int i = 0; i < resolution[0]; i++) {
+                int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
+                double distance = glm::length(data[idx] - input_vector);
+                
+                if (distance < minimum_distance)
+                {
+                    k = 1;
+                    minimum_distance = distance;
+                    winner = glm::vec3(i, j, k);
+                }
+                else if (distance == minimum_distance)
+                {
+                    k++;
+                    double random_value = dis(gen);
+
+                    if(random_value < 1.0 / k)
+                    {                    
+                        winner = glm::vec3(i, j, k);
+                    }
+                }
+            }
+        }
+    }
+
+    return winner;
+}
+
 double UpdateNeighbourhoodRadius(double original_radius, int iteration_count, int total_iteration_count);
 double UpdateLearningRate(double original_learning_rate, int iteration_count, int total_iteration_count);
 double CalculateInfluence(glm::vec2 BMU, glm::vec2 now_point, int resolution, double neighbourhood_radius);
 void CreateThread();
 void RunSOM();
 
-
-// 初始化神經元(mesh)的位置為cylinder
-void CreateCylindricalMesh(int resolution, glm::vec3 max, glm::vec3 min)
-{
-    // 網格的weight預設是以資料集的中心點，其xz平面畫圓，從y軸向上長的cylnder
-    glm::vec3 length = max - min;
-    float radius = (length.x + length.z) / 4;
-    float heightStep = length.y / resolution;
-    std::vector<Vertex_c> cylinder;
-    for(float y = 0; y < resolution - 1; ++y){ // height - column 
-        for(int i = 0; i < resolution; ++i){ // circle - row
-            // connected between circles
-            float angle = 2.0f * M_PI * i / resolution;
-            float x = radius * cos(angle) + min.x + length.x / 2;
-            float z = radius * sin(angle) + min.z + length.z / 2;
-            cylindrical_mesh[y][i] = glm::vec3(x, y * heightStep, z);
-
-            cylinder.push_back(Vertex_c{{x, y * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-            cylinder.push_back(Vertex_c{{x, (y + 1) * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-
-            // connected a complete circle
-            cylinder.push_back(Vertex_c{{x, y * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-            angle = 2.0f * M_PI * (i + 1) / resolution;
-            x = radius * cos(angle) + min.x + length.x / 2;
-            z = radius * sin(angle) + min.z + length.z / 2;
-            
-            cylinder.push_back(Vertex_c{{x, y * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-        }
-    }
-    // 補畫最後一層少的圓
-    for(int i = 0; i < resolution; ++i){    
-        // connected the whole circle
-        float angle = 2.0f * M_PI * i / resolution;
-        float x = radius * cos(angle) + min.x + length.x / 2;
-        float z = radius * sin(angle) + min.z + length.z / 2;
-        cylindrical_mesh[resolution - 1][i] = glm::vec3(x, (resolution - 1) * heightStep, z);
-
-        cylinder.push_back(Vertex_c{{x, (resolution - 1) * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-        angle = 2.0f * M_PI * (i + 1) / resolution;
-        x = radius * cos(angle) + min.x + length.x / 2;
-        z = radius * sin(angle) + min.z + length.z / 2;
-        cylinder.push_back(Vertex_c{{x, (resolution - 1) * heightStep, z}, {1.0f, 1.0f, 1.0f}, {}, {}});
-    }
-    
-    vertices.push_back(cylinder); // 2
-    cout<<"vetices2 size: "<<vertices[2].size()<<endl;
-}
-
-// 遍歷mesh找出BMU，距離最小的神經元
-glm::ivec2 FindBMU(glm::vec3 input_vector, int resolution)
-{
-    int k = 1;
-    float minimum_distance = std::numeric_limits<float>::max();
-    glm::ivec2 winner(0, 0);
-    for(int i = 0; i < resolution; ++i)
-    {
-        for(int j = 0; j < resolution; ++j)
-        {
-            float distance = glm::length(cylindrical_mesh[i][j] - input_vector);
-            if (distance < minimum_distance)
-            {
-                k = 1;
-                minimum_distance = distance;
-                winner.x = i;
-                winner.y = j;
-            }
-            else if (distance == minimum_distance)
-            {
-                k++;
-                // random number between 0 and 1
-                // !!! for c++ 11
-                std::random_device rd;
-                std::mt19937 gen(rd());
-                std::uniform_real_distribution<> dis(0.0, 1.0);
-                double random_value = dis(gen);
-                if(random_value < 1.0 / k)
-                {
-                    winner.x = i;
-                    winner.y = j;
-                }
-            }
-        }
-    }
-    return winner;
-}
 
 // 更新鄰域半徑
 double UpdateNeighbourhoodRadius(double original_radius, int iteration_count, int total_iteration_count)

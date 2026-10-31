@@ -1,3 +1,7 @@
+??? 疑問
+lattice = cube 在訓練texture是只訓練一個面然後複製六次嗎
+???
+
 * 讀進df data (保留)
 * 選取雕刻層和範圍
 * SOM
