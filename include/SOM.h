@@ -62,6 +62,9 @@ public:
 
     LatticesType lattice_type = CUBE; // 如果是訓練texture就一律設定為SQUARE
     
+    // 0: [0.0, 0.0], 1: [1.0, 0.0], 2: [1.0, 1.0], 3: [0.0, 1.0], 4: [i / (resolution[0] - 1), j / (resolution[1] - 1)]
+    glm::ivec2 *anchor_points = NULL; // 表index 只給texture用 或許可改?
+
     void initiateParameters(SomData &som_data);
     void createLattices(vector<glm::ivec3> &pos_data, SomData &som_data);
     glm::ivec3 findBMU(vector<glm::vec3> data, glm::vec3 input_vector);
@@ -74,6 +77,15 @@ void SOM::initiateParameters(SomData &som_data) {
     
     learning_rate_now = learning_rate_init;
     radius_init = radius_now = max(resolution[0], resolution[1]);
+
+    if(anchor_points == NULL) { // 只有第一次要初始化 之後可透過使用者修改
+        anchor_points = new int[5];
+        anchor_points[0] = glm::ivec2(0, 0);
+        anchor_points[1] = glm::ivec2(resolution[0] - 1, 0);
+        anchor_points[2] = glm::ivec2(resolution[0] - 1, resolution[1] - 1);
+        anchor_points[3] = glm::ivec2(0, resolution[1] - 1);
+        anchor_points[4] = glm::ivec2((resolution[0] - 1) / 2, (resolution[1] - 1) / 2);
+    }
 }
 
 // 根據要訓練的模型空間初始化lattices
@@ -187,6 +199,7 @@ void SOM::createLattices(vector<glm::ivec3> &pos_data, SomData &som_data) {
             som(i, j) = glm::vec3(dis(gen), dis(gen), 0.0f);
         }
     }
+    som(i, j) = 
 }
 
 // 遍歷mesh找出BMU，距離最小的神經元index
