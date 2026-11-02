@@ -1,10 +1,11 @@
 ??? 疑問
-lattice = cube 在訓練texture是只訓練一個面然後複製六次嗎
+Q: lattice = cube 在訓練texture是只訓練一個面然後複製六次嗎
+A: 好像是，先做看看
 ???
 
-* 讀進df data (保留)
-* 選取雕刻層和範圍
-* SOM
+# 讀進df data (保留)
+# 選取雕刻層和範圍
+# SOM
 1. initial texcoord and SOM position by range of input data
 2. 可選lattice，跳出網格選取5個anchor points (預設六面體，貼圖不扭曲)
 	選取後做一次initialization
@@ -16,8 +17,10 @@ lattice = cube 在訓練texture是只訓練一個面然後複製六次嗎
 		updata BMU and its neighbors
 		update radius and lr
 	done
+	*錨定點算法: (1) 每次找鄰居都跳過 (2) 鄰居照算，BMU為錨定點和訓練完後重製該錨定點
+				目前應該選1比較不用想那麼多
 
-* texture mapping
+# texture mapping
 到distance=0
 	另外儲存distance=0的voxels
 	需存原始index、

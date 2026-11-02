@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 #include <limits>
-#include <ramdon>
+#include <random>
 
 using namespace std;
 
@@ -51,7 +51,7 @@ struct SomData {
 
 class SOM {
 public:
-    int resolution[3];
+    int resolution[3]; // 用來區分 3D lattices (donut) and texcoord 的訓練
     int iter_max = 120000;
     int iter_now;
     
@@ -62,12 +62,16 @@ public:
 
     LatticesType lattice_type = CUBE; // 如果是訓練texture就一律設定為SQUARE
     
-    // 0: [0.0, 0.0], 1: [1.0, 0.0], 2: [1.0, 1.0], 3: [0.0, 1.0], 4: [i / (resolution[0] - 1), j / (resolution[1] - 1)]
-    glm::ivec2 *anchor_points = NULL; // 表index 只給texture用 或許可改?
+    // 只給texture用 或許可改?
+    glm::ivec2 *anchor_points_idx = NULL; // 表index 
+    glm::vec2 *anchor_points_texcoord = NULL; // 表texcoord
 
     void initiateParameters(SomData &som_data);
     void createLattices(vector<glm::ivec3> &pos_data, SomData &som_data);
     glm::ivec3 findBMU(vector<glm::vec3> data, glm::vec3 input_vector);
+    double updateNeighbourhoodRadius();
+    double updateLearningRate();
+    double calculateInfluence(glm::ivec2 BMU, glm::ivec2 now_point);
 };
 
 // 切換訓練種類時要呼叫
@@ -78,13 +82,18 @@ void SOM::initiateParameters(SomData &som_data) {
     learning_rate_now = learning_rate_init;
     radius_init = radius_now = max(resolution[0], resolution[1]);
 
-    if(anchor_points == NULL) { // 只有第一次要初始化 之後可透過使用者修改
-        anchor_points = new int[5];
-        anchor_points[0] = glm::ivec2(0, 0);
-        anchor_points[1] = glm::ivec2(resolution[0] - 1, 0);
-        anchor_points[2] = glm::ivec2(resolution[0] - 1, resolution[1] - 1);
-        anchor_points[3] = glm::ivec2(0, resolution[1] - 1);
-        anchor_points[4] = glm::ivec2((resolution[0] - 1) / 2, (resolution[1] - 1) / 2);
+    if(anchor_points_idx == NULL) { // 只有第一次要初始化 之後可透過使用者修改
+        anchor_points_idx = new glm::ivec2[5];
+        anchor_points_idx[0] = glm::ivec2(0, 0);
+        anchor_points_idx[1] = glm::ivec2(resolution[0] - 1, 0);
+        anchor_points_idx[2] = glm::ivec2(resolution[0] - 1, resolution[1] - 1);
+        anchor_points_idx[3] = glm::ivec2(0, resolution[1] - 1);
+        anchor_points_idx[4] = glm::ivec2((resolution[0] - 1) / 2, (resolution[1] - 1) / 2);
+
+        anchor_points_texcoord = new glm::vec2[5];
+        for(int j = 0; j < 5; j++) {
+            anchor_points_texcoord[j] = glm::ivec2(anchor_points_idx[j].x / (resolution[0] - 1), anchor_points_idx[j].y / (resolution[1] - 1));
+        }
     }
 }
 
@@ -196,10 +205,14 @@ void SOM::createLattices(vector<glm::ivec3> &pos_data, SomData &som_data) {
 
     for(int j = 0; j < resolution[1]; j++) {
         for(int i = 0; i < resolution[0]; i++) {
-            som(i, j) = glm::vec3(dis(gen), dis(gen), 0.0f);
+            som_data(i, j) = glm::vec3(dis(gen), dis(gen), 0.0f);
         }
     }
-    som(i, j) = 
+    for(int k = 0; k < 5; k++) { // 固定anchor points texcoord
+        int i = anchor_points_idx[k].x;
+        int j = anchor_points_idx[k].y;
+        som_data(i, j) = glm::vec3(anchor_points_texcoord[k].x, anchor_points_texcoord[k].y, 0.0f);
+    }
 }
 
 // 遍歷mesh找出BMU，距離最小的神經元index
@@ -242,43 +255,67 @@ glm::ivec3 SOM::findBMU(vector<glm::vec3> data, glm::vec3 input_vector)
     return winner;
 }
 
-double UpdateNeighbourhoodRadius(double original_radius, int iteration_count, int total_iteration_count);
-double UpdateLearningRate(double original_learning_rate, int iteration_count, int total_iteration_count);
-double CalculateInfluence(glm::vec2 BMU, glm::vec2 now_point, int resolution, double neighbourhood_radius);
-void CreateThread();
-void RunSOM();
-
 
 // 更新鄰域半徑
-double UpdateNeighbourhoodRadius(double original_radius, int iteration_count, int total_iteration_count)
+double SOM::updateNeighbourhoodRadius()
 {
-    return original_radius * exp( (double)-iteration_count * log(original_radius) / (double)total_iteration_count );
+    return radius_init * exp((double)-iter_now * log(radius_init) / (double)iter_max);
 }
 
 // 更新學習率
-double UpdateLearningRate(double original_learning_rate, int iteration_count, int total_iteration_count)
+double SOM::updateLearningRate()
 {
-    return original_learning_rate * exp( -(double)iteration_count / (double)total_iteration_count );
+    return learning_rate_init * exp((double)-iter_now / (double)iter_max);
 }
 
 // 計算BMU對其他神經元的影響力，距離越遠影響力越小，超過鄰域半徑的神經元不受BMU影響
-double CalculateInfluence(glm::vec2 BMU, glm::vec2 now_point, int resolution, double neighbourhood_radius)
+double SOM::calculateInfluence(glm::ivec2 BMU, glm::ivec2 now_point)
 {
-    double distance = (BMU.x - now_point.x) * (BMU.x - now_point.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
-    if (distance > neighbourhood_radius * neighbourhood_radius)
-    {
-        //cout<<" pre_distance: "<<distance;
-        // 配合cylinder的特性要考慮邊界情況，BMU和now_point在同一行但跨越邊界的情況
-        if(BMU.y < now_point.y)
-            distance = (resolution + BMU.y - now_point.y) * (resolution + BMU.y - now_point.y) + (BMU.x - now_point.x) * (BMU.x - now_point.x);
-        else
-            distance = (resolution + now_point.y - BMU.y) * (resolution + now_point.y - BMU.y) + (BMU.x - now_point.x) * (BMU.x - now_point.x);
+    double distance = 0.0;
+    if(lattice_type == SQUARE) {
+        distance = glm::length(BMU - now_point);
+    } 
+    else if(lattice_type == CYLINDER) {
+        double d1, d2;
+        d1 = glm::length(BMU - now_point); // 平面上直線的算法
 
-        if(distance > neighbourhood_radius * neighbourhood_radius)
-            return 0.0;
+        if(BMU.x < now_point.x) // 跨越邊界的算法
+            d2 = (resolution[0] + BMU.x - now_point.x) * (resolution[0] + BMU.x - now_point.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
+        else
+            d2 = (resolution[0] + now_point.x - BMU.x) * (resolution[0] + now_point.x - BMU.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
+        
+        distance = (d1 < d2) ? d1 : d2;
     }
-    //cout<<" distance: "<<distance;
-    return exp(-(distance / (2 * neighbourhood_radius * neighbourhood_radius)));
+    else if(lattice_type == DONUT) {
+        double d1, d2, d3, d4;
+        d1 = glm::length(BMU - now_point); // 平面上直線的算法
+
+        if(BMU.x < now_point.x) // 跨越x邊界的算法
+            d2 = (resolution[0] + BMU.x - now_point.x) * (resolution[0] + BMU.x - now_point.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
+        else
+            d2 = (resolution[0] + now_point.x - BMU.x) * (resolution[0] + now_point.x - BMU.x) + (BMU.y - now_point.y) * (BMU.y - now_point.y);
+
+        if(BMU.y < now_point.y) // 跨越y邊界的算法
+            d3 = (resolution[1] + BMU.y - now_point.y) * (resolution[1] + BMU.y - now_point.y) + (BMU.x - now_point.x) * (BMU.x - now_point.x);
+        else
+            d3 = (resolution[1] + now_point.y - BMU.y) * (resolution[1] + now_point.y - BMU.y) + (BMU.x - now_point.x) * (BMU.x - now_point.x);
+
+        if(BMU.x < now_point.x && BMU.y < now_point.y) // 跨越x和y邊界的算法
+            d4 = (resolution[0] + BMU.x - now_point.x) * (resolution[0] + BMU.x - now_point.x) + (resolution[1] + BMU.y - now_point.y) * (resolution[1] + BMU.y - now_point.y);
+        else if(BMU.x < now_point.x)
+            d4 = (resolution[0] + BMU.x - now_point.x) * (resolution[0] + BMU.x - now_point.x) + (resolution[1] + now_point.y - BMU.y) * (resolution[1] + now_point.y - BMU.y);
+        else if(BMU.y < now_point.y)
+            d4 = (resolution[0] + now_point.x - BMU.x) * (resolution[0] + now_point.x - BMU.x) + (resolution[1] + BMU.y - now_point.y) * (resolution[1] + BMU.y - now_point.y);
+        else 
+            d4 = (resolution[0] + now_point.x - BMU.x) * (resolution[0] + now_point.x - BMU.x) + (resolution[1] + now_point.y - BMU.y) * (resolution[1] + now_point.y - BMU.y);
+    }
+    else if(lattice_type == CUBE) {
+
+    }
+
+    if(distance > radius_now * radius_now)
+        return 0.0;
+    return exp(-(distance / (2 * radius_now * radius_now)));
 }
 
 void CreateThread()
