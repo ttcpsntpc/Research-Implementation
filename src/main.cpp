@@ -17,6 +17,7 @@
 #include "read_file.h"
 #include "UIManager.h"
 #include "distance_field_3D.h"
+#include "SOM.h"
 
 #include <iostream>
 #include <string>
@@ -36,7 +37,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 void processInput(GLFWwindow *window);
 
 // extra function
-vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Vertex_c> &vertex); 
+void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex);
+vector<glm::vec3> getVoxelIndex(VolumeData &df_data, glm::mat4 matrix);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -56,6 +58,7 @@ vector<Vertex_c> vertices_tri;
 // VolumeData volume_data = ReadObjFile("../../raw/teapot.obj", &vertices_tri); 
 DistanceField3D DF;
 UIManager UI;
+SOM_c SOM;
 
 int main()
 {
@@ -146,7 +149,7 @@ int main()
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex;
-    extractModelSurface(false, df_data, voxel_vertex);
+    getModelSurface(df_data, voxel_vertex);
     Object_c object_model;
     object_model.CreateObject(voxel_vertex, {});
 
@@ -202,89 +205,6 @@ int main()
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
         
-        
-        struct GridPoint {
-    int x, y;
-    // 讓 vector 可以去重或搜尋
-    bool operator==(const GridPoint& other) const { return x == other.x && y == other.y; }
-};
-
-// 模擬全域或類別成員變數，用來儲存已選取的點
-static std::vector<GridPoint> selected_points;
-
-// 網格設定
-const float GRID_SIZE = 40.0f;       // 每個網格的大小（像素）
-const float POINT_RADIUS = 6.0f;     // 節點點擊視覺反饋的半徑
-const int GRID_COLS = 15;            // 網格總欄數
-const int GRID_ROWS = 15;            // 網格總列數
-
-// 開始 ImGui 視窗
-ImGui::Begin("互動網格畫布");
-
-// 1. 定義一個隱形的自訂元件作為畫布，用來捕捉滑鼠事件
-ImVec2 canvas_pos = ImGui::GetCursorScreenPos();       // 畫布左上角在螢幕上的絕對坐標
-ImVec2 canvas_size(GRID_COLS * GRID_SIZE, GRID_ROWS * GRID_SIZE); // 畫布總大小
-ImGui::InvisibleButton("canvas", canvas_size);          // 建立一個隱形按鈕佔位
-
-// 取得當前視窗的繪圖列表
-ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-// 2. 繪製網格背景線
-ImU32 grid_color = IM_COL32(200, 200, 200, 40); // 淺灰色，帶透明度
-for (int i = 0; i <= GRID_COLS; i++) {
-    float x = canvas_pos.x + i * GRID_SIZE;
-    draw_list->AddLine(ImVec2(x, canvas_pos.x), ImVec2(x, canvas_pos.y + canvas_size.y), grid_color);
-}
-for (int j = 0; j <= GRID_ROWS; j++) {
-    float y = canvas_pos.y + j * GRID_SIZE;
-    draw_list->AddLine(ImVec2(canvas_pos.x, y), ImVec2(canvas_pos.x + canvas_size.x, y), grid_color);
-}
-
-// 3. 處理滑鼠點擊偵測
-if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-{
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-    
-    // 計算滑鼠相對於畫布左上角的偏移量
-    float local_x = mouse_pos.x - canvas_pos.x;
-    float local_y = mouse_pos.y - canvas_pos.y;
-
-    // 四捨五入到最近的網格交叉點坐標 (Grid Coordinates)
-    int grid_x = (int)std::round(local_x / GRID_SIZE);
-    int grid_y = (int)std::round(local_y / GRID_SIZE);
-
-    // 確保在合法網格範圍內
-    if (grid_x >= 0 && grid_x <= GRID_COLS && grid_y >= 0 && grid_y <= GRID_ROWS)
-    {
-        GridPoint clicked_p = { grid_x, grid_y };
-        
-        // 檢查是否已經選取過：若有則取消選取（Toggle），若無則加入
-        auto it = std::find(selected_points.begin(), selected_points.end(), clicked_p);
-        if (it != selected_points.end()) {
-            selected_points.erase(it); // 取消選取
-        } else {
-            selected_points.push_back(clicked_p); // 新增選取
-        }
-    }
-}
-
-// 4. 繪製所有已被選取的點
-ImU32 select_color = IM_COL32(255, 99, 71, 255); // 鮮豔的番茄紅
-for (const auto& p : selected_points)
-{
-    // 將網格坐標還原為螢幕絕對像素坐標
-    float screen_x = canvas_pos.x + p.x * GRID_SIZE;
-    float screen_y = canvas_pos.y + p.y * GRID_SIZE;
-    
-    // 在交叉點上畫一個實心圓形
-    draw_list->AddCircleFilled(ImVec2(screen_x, screen_y), POINT_RADIUS, select_color);
-}
-
-ImGui::End();
-
-
-
-
         ImGui::End();
 
         // create model matrix
@@ -468,20 +388,20 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-// 找模型表面體素，作為SOM的input並取得繪製體素的表面
-vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Vertex_c> &vertex) {
-    vector<glm::vec3> input_vector;
+// 找模型表面體素，取得繪製體素的表面
+// 或許可增進功能?
+void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
     
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
-    auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, int x_offset, int y_offset, int z_offset) {
+    auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset) {
         size_t old_size = vertex.size();
         vertex.insert(vertex.end(), face_vertices.begin(), face_vertices.end());
         size_t new_size = vertex.size();
         
         for(size_t v = old_size; v < new_size; v++) {
-            vertex[v].position.x += x_offset;
-            vertex[v].position.y += y_offset;
-            vertex[v].position.z += z_offset;
+            vertex[v].position.x += offset.x;
+            vertex[v].position.y += offset.y;
+            vertex[v].position.z += offset.z;
         }
     };
 
@@ -489,33 +409,59 @@ vector<glm::vec3> extractModelSurface(bool isSOM, VolumeData &df_data, vector<Ve
         for(int j = 0; j < df_data.resolution[1]; j++) {
             for(int k = 0; k < df_data.resolution[2]; k++) {
                 if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣
-                    bool isInput = false;
                     if((i == 0) || (df_data(i - 1, j, k)) != 0) { // -x
-                        insertAndOffsetFace(cube_face_vertices[0], i, j, k);
-                        isInput = true;
+                        insertAndOffsetFace(cube_face_vertices[0], {i, j, k});
                     }
                     if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != 0) { // +x
-                        insertAndOffsetFace(cube_face_vertices[1], i, j, k);
-                        isInput = true;
+                        insertAndOffsetFace(cube_face_vertices[1], {i, j, k});
                     }
                     if((j == 0) || (df_data(i, j - 1, k)) != 0) { // -y
-                        insertAndOffsetFace(cube_face_vertices[2], i, j, k);
-                        isInput = true;
+                        insertAndOffsetFace(cube_face_vertices[2], {i, j, k});
                     }
                     if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != 0) { // +y
-                        insertAndOffsetFace(cube_face_vertices[3], i, j, k);
-                        isInput = true;
+                        insertAndOffsetFace(cube_face_vertices[3], {i, j, k});
                     }
                     if((k == 0) || (df_data(i, j, k - 1)) != 0) { // -z
-                        insertAndOffsetFace(cube_face_vertices[4], i, j, k);
-                        isInput = true;
+                        insertAndOffsetFace(cube_face_vertices[4], {i, j, k});
                     }
                     if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != 0) { // +z
-                        insertAndOffsetFace(cube_face_vertices[5], i, j, k);
+                        insertAndOffsetFace(cube_face_vertices[5], {i, j, k});
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 找在範圍內的模型表面體素，當作SOM input
+vector<glm::vec3> getVoxelIndex(VolumeData &df_data, glm::mat4 matrix) {
+    vector<glm::vec3> input_vector;
+    
+    for(int i = 0; i < df_data.resolution[0]; i++) {
+        for(int j = 0; j < df_data.resolution[1]; j++) {
+            for(int k = 0; k < df_data.resolution[2]; k++) {
+                if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣以及是否是外部表面
+                    bool isInput = false;
+                    if((i == 0) || (df_data(i - 1, j, k)) < 0) { // -x
+                        isInput = true;
+                    }
+                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) < 0) { // +x
+                        isInput = true;
+                    }
+                    if((j == 0) || (df_data(i, j - 1, k)) < 0) { // -y
+                        isInput = true;
+                    }
+                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) < 0) { // +y
+                        isInput = true;
+                    }
+                    if((k == 0) || (df_data(i, j, k - 1)) < 0) { // -z
+                        isInput = true;
+                    }
+                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) < 0) { // +z
                         isInput = true;
                     }
 
-                    if(isSOM && isInput)
+                    if(isInput)
                         input_vector.push_back(glm::vec3(i, j, k));
                 }
             }

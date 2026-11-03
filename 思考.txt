@@ -3,8 +3,14 @@ Q: lattice = cube 在訓練texture是只訓練一個面然後複製六次嗎
 A: 好像是，先做看看
 ???
 
+??? 討論
+Q: 算表面的函式目前是對整個空間計算，之後要區分陰刻陽刻
+???
+
 # 讀進df data (保留)
-# 選取雕刻層和範圍
+# 選取雕刻層和雕刻範圍
+範圍可經過平移、旋轉、縮放、shearing
+選完範圍後將範圍內的表面納入input vector
 # SOM
 1. initial texcoord and SOM position by range of input data
 2. 可選lattice，跳出網格選取5個anchor points (預設六面體，貼圖不扭曲)
