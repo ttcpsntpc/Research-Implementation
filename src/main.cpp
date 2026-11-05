@@ -38,14 +38,14 @@ void processInput(GLFWwindow *window);
 
 // extra function
 void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex);
-vector<glm::vec3> getVoxelIndex(VolumeData &df_data, glm::mat4 matrix);
+vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
 // Camera
-Camera_c camera(glm::vec3(100.0f, 100.0f, 500.0f));
+Camera_c camera(glm::vec3(250.0f, 250.0f, 800.0f));
 glm::vec3 lightPos(500.0f, 500.0f, 500.0f);
 bool moveObject = 0; // 在移動光源或是相機
 
@@ -53,9 +53,6 @@ bool moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
-vector<Vertex_c> vertices_tri;
-// (1) 讓BB對齊學姊DF的大小
-// VolumeData volume_data = ReadObjFile("../../raw/teapot.obj", &vertices_tri); 
 DistanceField3D DF;
 UIManager UI;
 SOM_c SOM;
@@ -127,21 +124,6 @@ int main()
     axis.CreateObject(vertices[3], {});
     Object_c light_cube;
     light_cube.CreateObject(vertices[4], {});
-    Object_c Object_tri;
-    Object_tri.CreateObject(vertices_tri, {});
-
-    // (1)
-    // Object_c object_bi_voxel;
-    // object_bi_voxel.CreateObject(vertices[5], {});
-
-    // vector<glm::vec3> cube_pos; 
-    // for(int i = 0; i < volume_data.resolution[0]; i++)
-    //     for(int j = 0; j < volume_data.resolution[1]; j++)
-    //         for(int k = 0; k < volume_data.resolution[2]; k++) 
-    //             if(volume_data(i, j, k)==255)
-    //                 cube_pos.push_back({i, j, k});
-    // cout<<"Model voxel size: "<<cube_pos.size()<<endl;
-    // object_bi_voxel.UpdateInstances(cube_pos);
 
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
@@ -155,6 +137,16 @@ int main()
 
     UI.init();
 
+    // 體素選取矩陣
+    glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(100, 100, 100));
+    glm::mat4 transMat  = glm::translate(glm::mat4(1.0f), glm::vec3(100, 100, 150));
+    glm::mat4 cropMatrix = transMat * scaleMat;
+    glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
+
+    vector<glm::vec3> input_vector = getTrainingVoxel(df_data, invCropMatrix);
+    object_df_voxel.UpdateInstances(input_vector);
+
+
     // 顯示時統一縮放到一定範圍
     // 將(解析度 * voxel size)最高的那側作為分母縮放到512大小 並乘以voxel size
     double max_range = max(df_data.resolution[0] * df_data.voxel_size[0], max(df_data.resolution[1] * df_data.voxel_size[1], df_data.resolution[2] * df_data.voxel_size[2]));
@@ -162,8 +154,7 @@ int main()
     ratio *= df_data.voxel_size;
     int distance_range = 0;
 
-
-    bool is_draw_bi_voxels = false, is_draw_df_voxels = false, is_draw_model_triangles = false, is_draw_bounding_box = true;
+    bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
     // render loop
     // -----------
@@ -200,8 +191,7 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        ImGui::Checkbox("draw model triangles", &is_draw_model_triangles); //(1)
-        // ImGui::Checkbox("draw model bi-voxels", &is_draw_bi_voxels);
+        ImGui::Checkbox("draw model surface faces", &is_draw_model_surface); 
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
         
@@ -224,34 +214,15 @@ int main()
         shader.setVec3("lightPos", lightPos);
         shader.setVec3("viewPos", camera.Position);
 
-        // 畫一個測試方塊
-        // glBindVertexArray(cube.VAO_);
-        // model = glm::mat4(1.0f);
-        // model = glm::translate(model, glm::vec3(10.0f, 10.0f, 10.0f));
-        // model = glm::scale(model, glm::vec3(10, 10, 10));
-        // shader.setMat4("model", model);
-        // glDrawArrays(GL_TRIANGLES, 0, cube.size);
-        
-        // (1)
-        // 畫模型的三角片
-        if(is_draw_model_triangles) {
+        // 畫模型表面
+        if(is_draw_model_surface) {
             glBindVertexArray(object_model.VAO_);
-            model = glm::mat4(1.0f); 
+            model = glm::mat4(1.0f);
             model = glm::scale(model, ratio);
             shader.setMat4("model", model);
             shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArrays(GL_TRIANGLES, 0, object_model.size);
         }
-
-        // 畫binary voxels
-        // if(is_draw_bi_voxels) {
-        //     glBindVertexArray(object_bi_voxel.VAO_);
-        //     model = glm::mat4(1.0f);
-        //     model = glm::scale(model, glm::vec3(volume_data.voxel_size[0], volume_data.voxel_size[1], volume_data.voxel_size[2])); // 因為存位置時是直接用index存，需轉換成實際體素大小
-        //     model = glm::scale(model, ratio);
-        //     light_shader.setMat4("model", model);
-        //     glDrawArraysInstanced(GL_TRIANGLES, 0, object_bi_voxel.size, object_bi_voxel.instanceCount); 
-        // }
 
         if(is_draw_df_voxels) {
             glBindVertexArray(object_df_voxel.VAO_);
@@ -261,6 +232,18 @@ int main()
             shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_df_voxel.size, object_df_voxel.instanceCount); 
         }
+
+        // 畫一個測試方塊
+        glBindVertexArray(cube.VAO_);
+        model = cropMatrix;
+        model = glm::scale(model, ratio);
+        shader.setMat4("model", model);
+        shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
+        shader.setFloat("opacity", 0.5f);
+        glDepthMask(GL_FALSE); 
+        glDrawArrays(GL_TRIANGLES, 0, cube.size);
+        glDepthMask(GL_TRUE); 
+        shader.setFloat("opacity", 1.0f);
 
 
         // active shader for background
@@ -288,7 +271,6 @@ int main()
         // 畫 bounding box
         if(is_draw_bounding_box) {
             glDepthMask(GL_FALSE); 
-            glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
             glCullFace(GL_FRONT);
             light_shader.setFloat("opacity", 0.5f);
@@ -434,34 +416,21 @@ void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
 }
 
 // 找在範圍內的模型表面體素，當作SOM input
-vector<glm::vec3> getVoxelIndex(VolumeData &df_data, glm::mat4 matrix) {
+vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
     vector<glm::vec3> input_vector;
     
     for(int i = 0; i < df_data.resolution[0]; i++) {
         for(int j = 0; j < df_data.resolution[1]; j++) {
             for(int k = 0; k < df_data.resolution[2]; k++) {
-                if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣以及是否是外部表面
-                    bool isInput = false;
-                    if((i == 0) || (df_data(i - 1, j, k)) < 0) { // -x
-                        isInput = true;
-                    }
-                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) < 0) { // +x
-                        isInput = true;
-                    }
-                    if((j == 0) || (df_data(i, j - 1, k)) < 0) { // -y
-                        isInput = true;
-                    }
-                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) < 0) { // +y
-                        isInput = true;
-                    }
-                    if((k == 0) || (df_data(i, j, k - 1)) < 0) { // -z
-                        isInput = true;
-                    }
-                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) < 0) { // +z
-                        isInput = true;
-                    }
-
-                    if(isInput)
+                if(1) { // 記得改回來!!!
+                    glm::vec4 voxel(i + 0.5f, j + 0.5f, k + 0.5f, 1.0f); // model space
+                    glm::vec4 local_space = matrix * voxel; // transform to LCS
+                    glm::vec3 local_pos = glm::vec3(local_space) / local_space.w; // get local position
+                    
+                    // 直接檢查是否在 0~1 內
+                    if (local_pos.x >= 0.0f && local_pos.x <= 1.0f &&
+                        local_pos.y >= 0.0f && local_pos.y <= 1.0f &&
+                        local_pos.z >= 0.0f && local_pos.z <= 1.0f)  
                         input_vector.push_back(glm::vec3(i, j, k));
                 }
             }
