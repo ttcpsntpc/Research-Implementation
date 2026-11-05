@@ -47,15 +47,32 @@ const unsigned int SCR_HEIGHT = 720;
 // Camera
 Camera_c camera(glm::vec3(250.0f, 250.0f, 800.0f));
 glm::vec3 lightPos(500.0f, 500.0f, 500.0f);
-bool moveObject = 0; // 在移動光源或是相機
+int moveObject = 0; // 在移動光源或是相機
 
 // timing
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
+// input擷取框
+glm::vec3 target_translate(100, 100, 150);
+glm::vec3 target_scale(100, 100, 100);
+
+// input體素選取矩陣
+glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
+glm::mat4 transMat  = glm::translate(glm::mat4(1.0f), target_translate);
+glm::mat4 cropMatrix = transMat * scaleMat;
+
+vector<glm::vec3> input_vector;
+
 DistanceField3D DF;
 UIManager UI;
 SOM_c SOM;
+
+void updateCropMatrix() {
+    scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
+    transMat  = glm::translate(glm::mat4(1.0f), target_translate);
+    cropMatrix = transMat * scaleMat;
+}
 
 int main()
 {
@@ -125,6 +142,8 @@ int main()
     Object_c light_cube;
     light_cube.CreateObject(vertices[4], {});
 
+    Object_c object_input_voxel;
+    object_input_voxel.CreateObject(vertices[5], {});
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
@@ -137,23 +156,15 @@ int main()
 
     UI.init();
 
-    // 體素選取矩陣
-    glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(100, 100, 100));
-    glm::mat4 transMat  = glm::translate(glm::mat4(1.0f), glm::vec3(100, 100, 150));
-    glm::mat4 cropMatrix = transMat * scaleMat;
-    glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-
-    vector<glm::vec3> input_vector = getTrainingVoxel(df_data, invCropMatrix);
-    object_df_voxel.UpdateInstances(input_vector);
-
 
     // 顯示時統一縮放到一定範圍
     // 將(解析度 * voxel size)最高的那側作為分母縮放到512大小 並乘以voxel size
     double max_range = max(df_data.resolution[0] * df_data.voxel_size[0], max(df_data.resolution[1] * df_data.voxel_size[1], df_data.resolution[2] * df_data.voxel_size[2]));
     glm::vec3 ratio(512 / max_range); 
     ratio *= df_data.voxel_size;
-    int distance_range = 0;
 
+    int distance_range = 0;
+    bool is_draw_input_BB = true, is_draw_input_voxels = true;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
     // render loop
@@ -179,7 +190,21 @@ int main()
 
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
+
         ImGui::Begin("GUI");
+        // input擷取框資訊
+        ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
+        ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
+        if(ImGui::Button("get input voxel")) {
+            glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
+            input_vector = getTrainingVoxel(df_data, invCropMatrix);
+            object_input_voxel.UpdateInstances(input_vector);
+        }
+        ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
+        ImGui::SameLine;
+        ImGui::Checkbox("draw input voxels", &is_draw_input_voxels); 
+
+        
         ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
         if(ImGui::Button("update voxels")) {
             vector<glm::vec3> cube_pos;
@@ -224,6 +249,7 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, object_model.size);
         }
 
+        // 畫不同距離的模型
         if(is_draw_df_voxels) {
             glBindVertexArray(object_df_voxel.VAO_);
             model = glm::mat4(1.0f);
@@ -233,17 +259,29 @@ int main()
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_df_voxel.size, object_df_voxel.instanceCount); 
         }
 
-        // 畫一個測試方塊
-        glBindVertexArray(cube.VAO_);
-        model = cropMatrix;
-        model = glm::scale(model, ratio);
-        shader.setMat4("model", model);
-        shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
-        shader.setFloat("opacity", 0.5f);
-        glDepthMask(GL_FALSE); 
-        glDrawArrays(GL_TRIANGLES, 0, cube.size);
-        glDepthMask(GL_TRUE); 
-        shader.setFloat("opacity", 1.0f);
+        // 畫選取框內的Input voxels
+        if(is_draw_input_voxels) {
+            glBindVertexArray(object_input_voxel.VAO_);
+            model = glm::mat4(1.0f);
+            model = glm::scale(model, ratio);
+            shader.setMat4("model", model);
+            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            glDrawArraysInstanced(GL_TRIANGLES, 0, object_input_voxel.size, object_input_voxel.instanceCount); 
+        }
+
+        // 畫選取方塊 ( input BB )
+        if(is_draw_input_BB) {
+            glBindVertexArray(cube.VAO_);
+            model = glm::scale(glm::mat4(1.0f), ratio);
+            model = model * cropMatrix;
+            shader.setMat4("model", model);
+            shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
+            shader.setFloat("opacity", 0.6f);
+            glDepthMask(GL_FALSE); 
+            glDrawArrays(GL_TRIANGLES, 0, cube.size);
+            glDepthMask(GL_TRUE); 
+            shader.setFloat("opacity", 1.0f);
+        }
 
 
         // active shader for background
@@ -268,7 +306,7 @@ int main()
         light_shader.setMat4("model", model);
         glDrawArrays(GL_LINES, 0, axis.size);
         
-        // 畫 bounding box
+        // 畫 model BB
         if(is_draw_bounding_box) {
             glDepthMask(GL_FALSE); 
             glEnable(GL_CULL_FACE);
@@ -308,7 +346,7 @@ int main()
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
-        moveObject = !moveObject;
+        moveObject = (moveObject + 1) % 3;
     }
 }
 
@@ -319,7 +357,7 @@ void processInput(GLFWwindow *window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if(moveObject == 0)
+    if(moveObject == 0) // 視角
     {
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera.ProcessKeyboard(FRONT, deltaTime);
@@ -334,7 +372,7 @@ void processInput(GLFWwindow *window)
         if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
             camera.ProcessKeyboard(DOWN, deltaTime);
     }
-    else
+    else if(moveObject == 1) // light
     {
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             lightPos.z -= 100.0f * deltaTime; 
@@ -348,6 +386,58 @@ void processInput(GLFWwindow *window)
             lightPos.y += 100.0f * deltaTime; 
         if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
             lightPos.y -= 100.0f * deltaTime; 
+    }
+    else if(moveObject == 2) // 擷取框範圍
+    {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            target_translate.z -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            target_translate.z += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            target_translate.x -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            target_translate.x += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+            target_translate.y += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+            target_translate.y -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+
+        if (glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS) {
+            target_scale.x -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS) {
+            target_scale.x += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS) {
+            target_scale.y -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS) {
+            target_scale.y += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_KP_0) == GLFW_PRESS) {
+            target_scale.z -= 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
+        if (glfwGetKey(window, GLFW_KEY_KP_5) == GLFW_PRESS) {
+            target_scale.z += 100.0f * deltaTime; 
+            updateCropMatrix();
+        }
     }
 
     if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
@@ -422,7 +512,7 @@ vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
     for(int i = 0; i < df_data.resolution[0]; i++) {
         for(int j = 0; j < df_data.resolution[1]; j++) {
             for(int k = 0; k < df_data.resolution[2]; k++) {
-                if(1) { // 記得改回來!!!
+                if(df_data(i, j, k) == 0) { // 可改進，讓真正在表面的體素才納入
                     glm::vec4 voxel(i + 0.5f, j + 0.5f, k + 0.5f, 1.0f); // model space
                     glm::vec4 local_space = matrix * voxel; // transform to LCS
                     glm::vec3 local_pos = glm::vec3(local_space) / local_space.w; // get local position
