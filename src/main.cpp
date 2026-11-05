@@ -201,7 +201,7 @@ int main()
             object_input_voxel.UpdateInstances(input_vector);
         }
         ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
-        ImGui::SameLine;
+        ImGui::SameLine();
         ImGui::Checkbox("draw input voxels", &is_draw_input_voxels); 
 
         
