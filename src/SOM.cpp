@@ -3,6 +3,7 @@
 
 // 切換訓練種類時要呼叫
 void SOM_c::initiateParameters(SomData &som_data) {
+    lattice_type = som_data.lattice_type;
     for(int i = 0; i < 3; i++)
         resolution[i] = som_data.resolution[i];
     
@@ -24,8 +25,8 @@ void SOM_c::initiateParameters(SomData &som_data) {
     }
 }
 
-// 根據要訓練的模型空間初始化lattices
-void SOM_c::createLattices(vector<glm::ivec3> &pos_data, SomData &som_data) {
+// 根據要訓練的模型空間初始化lattice
+void SOM_c::initiateLattice(vector<glm::ivec3> &pos_data, SomData &som_data) {
     glm::ivec3 min(numeric_limits<int>::max()), max(numeric_limits<int>::lowest()); // voxel index min/max // form a BB
     for(auto data : pos_data) {
         min = glm::min(min, data);

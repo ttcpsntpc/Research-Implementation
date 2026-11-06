@@ -22,17 +22,21 @@ enum LatticesType {
 // 0 3 1   left top right 
 //   5          front
 struct SomData {
-    int resolution[3]; // width height slice
+    int resolution[3]; // neuron: width height faces
     vector<glm::vec3> texcoord; // r coordinate用不到 // 方便find BMU function的統一
     vector<glm::vec3> pos;
+
+    LatticesType lattice_type; 
 
     SomData(int width, int height) {
         resolution[0] = width; 
         resolution[1] = height;
-        resolution[2] = 1; // 預設為1
+        resolution[2] = 6; // 預設為cube
+        
+        lattice_type = CUBE;
 
-        texcoord.resize(resolution[0] * resolution[1] * resolution[2]); // 應該就不變了
-        pos.resize(resolution[0] * resolution[1] * resolution[2]); // 若改成donut就會改變
+        texcoord.resize(resolution[0] * resolution[1] * 1); // 固定是一個2D plane
+        pos.resize(resolution[0] * resolution[1] * 6); // 固定大小為最大的CUBE
     };
     
     int idx(int i, int j) const { 
@@ -68,7 +72,7 @@ public:
     glm::vec2 *anchor_points_texcoord = NULL; // 表texcoord
 
     void initiateParameters(SomData &som_data);
-    void createLattices(vector<glm::ivec3> &pos_data, SomData &som_data);
+    void initiateLattice(vector<glm::ivec3> &pos_data, SomData &som_data);
     glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
     double updateNeighbourhoodRadius();
     double calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point);

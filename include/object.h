@@ -121,6 +121,26 @@ public:
 
         instanceCount = pos.size();
     }
+    void UpdateInstances(const std::vector<glm::ivec3> &pos) 
+    {
+        glBindBuffer(GL_ARRAY_BUFFER, instance_VBO_);
+        size_t newSizeBytes = pos.size() * sizeof(glm::vec3);
+
+        // 容量管理邏輯
+        if (newSizeBytes > instanceCapacityBytes_) 
+        {
+            // 擴容 1.5 倍，並使用 GL_DYNAMIC_DRAW
+            instanceCapacityBytes_ = std::max(newSizeBytes, instanceCapacityBytes_ + instanceCapacityBytes_ / 2);
+            glBufferData(GL_ARRAY_BUFFER, instanceCapacityBytes_, pos.data(), GL_DYNAMIC_DRAW);
+        } 
+        else 
+        {
+            // 容量足夠，直接覆寫
+            glBufferSubData(GL_ARRAY_BUFFER, 0, newSizeBytes, pos.data());
+        }
+
+        instanceCount = pos.size();
+    }
 };
 
 #endif

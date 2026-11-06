@@ -39,6 +39,7 @@ void processInput(GLFWwindow *window);
 // extra function
 void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex);
 vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix);
+vector<Vertex_c> getLatticesVertices(SomData som_data);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -63,6 +64,7 @@ glm::mat4 transMat  = glm::translate(glm::mat4(1.0f), target_translate);
 glm::mat4 cropMatrix = transMat * scaleMat;
 
 vector<glm::vec3> input_vector;
+vector<Vertex_c> lattice_vertices;
 
 DistanceField3D DF;
 UIManager UI;
@@ -148,11 +150,18 @@ int main()
     object_df_voxel.CreateObject(vertices[5], {});
 
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
+
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex;
     getModelSurface(df_data, voxel_vertex);
     Object_c object_model;
     object_model.CreateObject(voxel_vertex, {});
+
+    Object_c object_lattice;
+    SomData som_data(32, 32);
+    som_data.lattice_type = SQUARE;
+    SOM.initiateParameters(som_data);
+    
 
     UI.init();
 
@@ -199,6 +208,10 @@ int main()
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
             input_vector = getTrainingVoxel(df_data, invCropMatrix);
             object_input_voxel.UpdateInstances(input_vector);
+
+            // SOM.initiateLattice(input_vector, som_data);
+            // lattice_vertices = getLatticesVertices(som_data);
+            // object_lattice.CreateObject(lattice_vertices, {});
         }
         ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
         ImGui::SameLine();
@@ -298,7 +311,7 @@ int main()
         model = glm::scale(model, glm::vec3(10, 10, 10));
         light_shader.setMat4("model", model);
         glDrawArrays(GL_TRIANGLES, 0, light_cube.size);
-        
+
         // draw the 3 axis
         glBindVertexArray(axis.VAO_);
         model = glm::mat4(1.0f);
@@ -527,4 +540,47 @@ vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
         }
     }
     return input_vector;
+}
+
+vector<Vertex_c> getLatticesVertices(SomData som_data) {
+    vector<Vertex_c> vertices;
+    int lattice_type = som_data.lattice_type;
+    int *resolution = som_data.resolution;
+
+
+    if(lattice_type == SQUARE) {
+        for(int j = 0; j < resolution[1] - 1; j++)
+            for(int i = 0; i < resolution[0] - 1; i++) {
+                glm::vec3 v0(som_data(i, j, 0));
+                glm::vec3 v1(som_data(i + 1, j, 0));
+                glm::vec3 v2(som_data(i + 1, j + 1, 0));
+                glm::vec3 v3(som_data(i, j + 1, 0));
+                glm::vec3 t0(som_data(i, j));
+                glm::vec3 t1(som_data(i + 1, j));
+                glm::vec3 t2(som_data(i + 1, j + 1));
+                glm::vec3 t3(som_data(i, j + 1));
+
+                glm::vec3 n0 = glm::normalize(glm::cross(v1 - v0, v3 - v0)); // 左下三角片
+                glm::vec3 n1 = glm::normalize(glm::cross(v3 - v2, v1 - v2)); // 右上三角片
+
+                vertices.push_back({{v0.x, v0.y, v0.z}, {}, {t0.x, t0.y, t0.z}, {n0.x, n0.y, n0.z}});
+                vertices.push_back({{v1.x, v1.y, v1.z}, {}, {t1.x, t1.y, t1.z}, {n0.x, n0.y, n0.z}});
+                vertices.push_back({{v3.x, v3.y, v3.z}, {}, {t3.x, t3.y, t3.z}, {n0.x, n0.y, n0.z}});
+
+                vertices.push_back({{v1.x, v1.y, v1.z}, {}, {t1.x, t1.y, t1.z}, {n1.x, n1.y, n1.z}});
+                vertices.push_back({{v2.x, v2.y, v2.z}, {}, {t2.x, t2.y, t2.z}, {n1.x, n1.y, n1.z}});
+                vertices.push_back({{v3.x, v3.y, v3.z}, {}, {t3.x, t3.y, t3.z}, {n1.x, n1.y, n1.z}});
+            }
+    } 
+    else if(lattice_type == CYLINDER) {
+
+    }
+    else if(lattice_type == DONUT) {
+        
+    }
+    else if(lattice_type == CUBE) {
+
+    }
+
+    return vertices;
 }
