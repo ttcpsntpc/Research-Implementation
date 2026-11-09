@@ -609,6 +609,7 @@ vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
     return input_vector;
 }
 
+// 得到lattice的mesh頂點資訊
 vector<Vertex_c> getLatticesVertices(SomData som_data) {
     vector<Vertex_c> vertices;
     int lattice_type = som_data.lattice_type;
