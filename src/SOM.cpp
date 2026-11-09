@@ -33,8 +33,12 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
         max = glm::max(max, data);
     }
     glm::vec3 size = max - min; // 轉成float比較方便使用
-    glm::vec3 center = glm::vec3(min.x + size.x / 2, min.y, min.z + size.z / 2);
+    glm::vec3 center = glm::vec3(min.x + size.x / 2, min.y + size.y / 2, min.z + size.z / 2);
     double x, y, z;
+    double ratio = 1.2; // 讓lattice不要太貼而乘上一個倍率
+    min -= size * 0.2f;
+    max += size * 0.2f;
+    size = max - min;
 
     // initial position
     if(lattice_type == SQUARE) { // 初始化於max z上的面
@@ -49,13 +53,13 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
     } 
     else if(lattice_type == CYLINDER) { // 高為y軸的圓柱
         double y_gap = size.y / (resolution[1] - 1);
-        double radius = glm::max(size.x, glm::max(size.y, size.z)) / 2; // 最大分量除以2
+        double radius = glm::max(size.x, size.z) / 2; 
 
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 x = center.x + radius * cos(2 * PI * i / (resolution[0] - 1));
                 y = min.y + j * y_gap;
-                z = center.z + radius * sin(2 * PI * j / (resolution[0] - 1));
+                z = center.z + radius * sin(2 * PI * i / (resolution[0] - 1));
 
                 som_data(i, j, 0) = glm::vec3(x, y, z);
             }
@@ -71,7 +75,7 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
                 double theta = 2 * PI * j / (resolution[1] - 1);
 
                 x = (R + r * cos(phi)) * cos(theta);
-                y = (R + r * cos(phi)) * sin(theta);
+                y = (R + r * cos(phi)) * sin(theta) ;
                 z = r * sin(phi);
 
                 som_data(i, j, 0) = center + glm::vec3(x, y, z);
@@ -79,15 +83,13 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
         }
     } 
     else if(lattice_type == CUBE) {
-        resolution[2] = 6;
-
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
-                double ratio_i = i / (resolution[0] - 1);
-                double ratio_j = j / (resolution[1] - 1);
+                double ratio_i = (double)i / (resolution[0] - 1);
+                double ratio_j = (double)j / (resolution[1] - 1);
 
                 // y-z plane left
-                x = 0;
+                x = min.x;
                 y = min.y + size.y * ratio_j;
                 z = min.z + size.z * ratio_i;
                 som_data(i, j, 0) = glm::vec3(x, y, z);
@@ -100,7 +102,7 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
 
                 // x-z plane down
                 x = min.x + size.x * ratio_i;
-                y = 0;
+                y = min.y;
                 z = min.z + size.z * ratio_j;
                 som_data(i, j, 2) = glm::vec3(x, y, z);
                 
@@ -113,13 +115,13 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
                 // x-y plne back
                 x = min.x + size.x * ratio_i;
                 y = min.y + size.y * ratio_j;
-                z = 0;
+                z = min.z;
                 som_data(i, j, 4) = glm::vec3(x, y, z);
 
                 // x-y plane front
                 x = min.x + size.x * ratio_i;
                 y = min.y + size.y * ratio_j;
-                z = max.y;
+                z = max.z;
                 som_data(i, j, 5) = glm::vec3(x, y, z);
             }
         }

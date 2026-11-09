@@ -31,14 +31,21 @@ struct SomData {
     SomData(int width, int height) {
         resolution[0] = width; 
         resolution[1] = height;
-        resolution[2] = 6; // 預設為cube
+        resolution[2] = 1; // 預設為cube
         
-        lattice_type = CUBE;
+        lattice_type = SQUARE;
 
         texcoord.resize(resolution[0] * resolution[1] * 1); // 固定是一個2D plane
         pos.resize(resolution[0] * resolution[1] * 6); // 固定大小為最大的CUBE
     };
     
+    inline void setType(LatticesType type) {
+        lattice_type = type;
+        if(type == CUBE)
+            resolution[2] = 6;
+        else resolution[2] = 1;
+    }
+
     int idx(int i, int j) const { 
         return j * resolution[0] + i; 
     }

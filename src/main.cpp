@@ -158,8 +158,10 @@ int main()
     object_model.CreateObject(voxel_vertex, {});
 
     Object_c object_lattice;
+    object_lattice.CreateObject(lattice_vertices, {}); // 初始化一個空的
+    
     SomData som_data(32, 32);
-    som_data.lattice_type = SQUARE;
+    som_data.setType(SQUARE);
     SOM.initiateParameters(som_data);
     
 
@@ -173,6 +175,7 @@ int main()
     ratio *= df_data.voxel_size;
 
     int distance_range = 0;
+    
     bool is_draw_input_BB = true, is_draw_input_voxels = true;
     bool is_draw_SOM = true, is_SOM_filled = false;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
@@ -212,9 +215,10 @@ int main()
             object_input_voxel.UpdateInstances(input_vector);
 
             // 取得SOM mesh三角片並初始化
+            SOM.initiateParameters(som_data);
             SOM.initiateLattice(input_vector, som_data);
             lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.CreateObject(lattice_vertices, {});
+            object_lattice.RenewObject(lattice_vertices);
         }
         ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
         ImGui::SameLine();
@@ -235,10 +239,43 @@ int main()
         ImGui::Checkbox("draw model surface faces", &is_draw_model_surface); 
         ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
-        
         ImGui::End();
 
+        // SOM
         ImGui::Begin("SOM");
+        static int selected_index = 0;
+        if (ImGui::RadioButton("PLANE", &selected_index, SQUARE)) { 
+            som_data.setType(SQUARE);
+            SOM.initiateParameters(som_data);
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.RenewObject(lattice_vertices);
+        }
+        ImGui::SameLine(); // 讓按鈕排在同一行
+        if (ImGui::RadioButton("CYLINDER", &selected_index, CYLINDER)) { 
+            som_data.setType(CYLINDER);
+            SOM.initiateParameters(som_data);
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.RenewObject(lattice_vertices);
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("DONUT", &selected_index, DONUT)) { 
+            som_data.setType(DONUT);
+            SOM.initiateParameters(som_data);
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.RenewObject(lattice_vertices);
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("CUBE", &selected_index, CUBE)) { 
+            som_data.setType(CUBE);
+            SOM.initiateParameters(som_data);
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.RenewObject(lattice_vertices);
+        }
+
         if (ImGui::Button("Run SOM")) {
         }
         ImGui::SameLine();
@@ -577,15 +614,14 @@ vector<Vertex_c> getLatticesVertices(SomData som_data) {
     int lattice_type = som_data.lattice_type;
     int *resolution = som_data.resolution;
 
-
-    if(lattice_type == SQUARE) {
-        for(int j = 0; j < resolution[1] - 1; j++)
+    for(int k = 0; k < resolution[2]; k++)
+       for(int j = 0; j < resolution[1] - 1; j++)
             for(int i = 0; i < resolution[0] - 1; i++) {
                 // vertices position
-                glm::vec3 v0(som_data(i, j, 0));
-                glm::vec3 v1(som_data(i + 1, j, 0));
-                glm::vec3 v2(som_data(i + 1, j + 1, 0));
-                glm::vec3 v3(som_data(i, j + 1, 0));
+                glm::vec3 v0(som_data(i, j, k));
+                glm::vec3 v1(som_data(i + 1, j, k));
+                glm::vec3 v2(som_data(i + 1, j + 1, k));
+                glm::vec3 v3(som_data(i, j + 1, k));
                 // texcoord
                 glm::vec3 t0(som_data(i, j));
                 glm::vec3 t1(som_data(i + 1, j));
@@ -603,16 +639,6 @@ vector<Vertex_c> getLatticesVertices(SomData som_data) {
                 vertices.push_back({{v2.x, v2.y, v2.z}, {}, {t2.x, t2.y, t2.z}, {n1.x, n1.y, n1.z}});
                 vertices.push_back({{v3.x, v3.y, v3.z}, {}, {t3.x, t3.y, t3.z}, {n1.x, n1.y, n1.z}});
             }
-    } 
-    else if(lattice_type == CYLINDER) {
-
-    }
-    else if(lattice_type == DONUT) {
-        
-    }
-    else if(lattice_type == CUBE) {
-
-    }
 
     return vertices;
 }
