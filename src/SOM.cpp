@@ -26,8 +26,8 @@ void SOM_c::initiateParameters(SomData &som_data) {
 }
 
 // 根據要訓練的模型空間初始化lattice
-void SOM_c::initiateLattice(vector<glm::ivec3> &pos_data, SomData &som_data) {
-    glm::ivec3 min(numeric_limits<int>::max()), max(numeric_limits<int>::lowest()); // voxel index min/max // form a BB
+void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
+    glm::vec3 min(numeric_limits<float>::max()), max(numeric_limits<float>::lowest()); // voxel index min/max // form a BB
     for(auto data : pos_data) {
         min = glm::min(min, data);
         max = glm::max(max, data);

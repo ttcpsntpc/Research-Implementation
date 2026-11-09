@@ -72,14 +72,15 @@ public:
     glm::vec2 *anchor_points_texcoord = NULL; // 表texcoord
 
     void initiateParameters(SomData &som_data);
-    void initiateLattice(vector<glm::ivec3> &pos_data, SomData &som_data);
+    void initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data);
+    void runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
+
+private:
     glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
     double updateNeighbourhoodRadius();
     double calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point);
     double updateLearningRate();
-    void runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
 
-private:
     glm::ivec3 calculateCubeIndexPos(glm::ivec3 idx);
 };
 

@@ -174,6 +174,7 @@ int main()
 
     int distance_range = 0;
     bool is_draw_input_BB = true, is_draw_input_voxels = true;
+    bool is_draw_SOM = true, is_SOM_filled = false;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
     // render loop
@@ -205,13 +206,15 @@ int main()
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
         if(ImGui::Button("get input voxel")) {
+            // 取得training voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
             input_vector = getTrainingVoxel(df_data, invCropMatrix);
             object_input_voxel.UpdateInstances(input_vector);
 
-            // SOM.initiateLattice(input_vector, som_data);
-            // lattice_vertices = getLatticesVertices(som_data);
-            // object_lattice.CreateObject(lattice_vertices, {});
+            // 取得SOM mesh三角片並初始化
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.CreateObject(lattice_vertices, {});
         }
         ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
         ImGui::SameLine();
@@ -234,6 +237,18 @@ int main()
         ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
         
         ImGui::End();
+
+        ImGui::Begin("SOM");
+        if (ImGui::Button("Run SOM")) {
+        }
+        ImGui::SameLine();
+        ImGui::Text("i: %d", SOM.iter_now);
+        ImGui::Text("radius: %f", SOM.radius_now);
+        ImGui::Text("learning: %f", SOM.learning_rate_now);
+        ImGui::Checkbox("draw SOM mesh", &is_draw_SOM); 
+        ImGui::Checkbox("filling triangle", &is_SOM_filled); 
+        ImGui::End();
+
 
         // create model matrix
         glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
@@ -295,7 +310,22 @@ int main()
             glDepthMask(GL_TRUE); 
             shader.setFloat("opacity", 1.0f);
         }
-
+        
+        // 畫SOM mesh
+        if(is_draw_SOM) {
+            glBindVertexArray(object_lattice.VAO_);
+            model = glm::scale(glm::mat4(1.0f), ratio);
+            shader.setMat4("model", model);
+            shader.setVec3("color", glm::vec3(1.0, 1.0, 0.8));
+            if(is_SOM_filled) {
+                glDrawArrays(GL_TRIANGLES, 0, object_lattice.size);
+            }
+            else {
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                glDrawArrays(GL_TRIANGLES, 0, object_lattice.size);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            }
+        }
 
         // active shader for background
         light_shader.use();
@@ -551,15 +581,17 @@ vector<Vertex_c> getLatticesVertices(SomData som_data) {
     if(lattice_type == SQUARE) {
         for(int j = 0; j < resolution[1] - 1; j++)
             for(int i = 0; i < resolution[0] - 1; i++) {
+                // vertices position
                 glm::vec3 v0(som_data(i, j, 0));
                 glm::vec3 v1(som_data(i + 1, j, 0));
                 glm::vec3 v2(som_data(i + 1, j + 1, 0));
                 glm::vec3 v3(som_data(i, j + 1, 0));
+                // texcoord
                 glm::vec3 t0(som_data(i, j));
                 glm::vec3 t1(som_data(i + 1, j));
                 glm::vec3 t2(som_data(i + 1, j + 1));
                 glm::vec3 t3(som_data(i, j + 1));
-
+                // normal
                 glm::vec3 n0 = glm::normalize(glm::cross(v1 - v0, v3 - v0)); // 左下三角片
                 glm::vec3 n1 = glm::normalize(glm::cross(v3 - v2, v1 - v2)); // 右上三角片
 
