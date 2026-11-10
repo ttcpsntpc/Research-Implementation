@@ -6,22 +6,18 @@ in vec3 TexCoord;
 in vec3 Normal;
 in vec3 FragPos;
 
-uniform sampler3D texture1;
-uniform sampler1D texture2;
-
+uniform sampler2D image;
 uniform vec3 lightPos;
 uniform vec3 viewPos;
-uniform vec3 color;
 uniform float opacity;
 
 vec3 PhongShading(vec3 gradient,vec3 color);
 
 void main(){
     vec3 P = FragPos;
-    vec3 Color = PhongShading(Normal, color);
+    
+    vec3 Color = PhongShading(Normal, texture(image, TexCoord.st).rgb);
     FragColor = vec4(Color, opacity);
-    // sol. 1
-    //FragColor = vec4(PhongShading(Normal), 1.0f);
 }
 
 vec3 PhongShading(vec3 gradient,vec3 color){

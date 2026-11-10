@@ -8,9 +8,6 @@ in vec3 FragPos;
 
 uniform float opacity;
 
-// function prototypes
-vec3 PhongShading(vec3 gradient,vec3 color);
-
 void main(){
     FragColor = vec4(ourColor, opacity);
 }

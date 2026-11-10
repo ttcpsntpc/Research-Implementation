@@ -134,8 +134,9 @@ int main()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    Shader_c shader("shader/shader.vs", "shader/shader.fs");
+    Shader_c color_shader("shader/color_shader.vs", "shader/color_shader.fs");
     Shader_c light_shader("shader/light_shader.vs", "shader/light_shader.fs");
+    Shader_c tex_shader("shader/texture_shader.vs", "shader/texture_shader.fs");
 
     vertex.CreateVertices();
     Object_c square_red;
@@ -154,7 +155,7 @@ int main()
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
-    VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
+    VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
 
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex;
@@ -170,7 +171,22 @@ int main()
 
     UI.init();
 
-
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("../../picture/chest.png", &width, &height, &nrChannels, 0);
+    if (data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else cout<<"load image failed"<<endl;
+    tex_shader.use();
+    tex_shader.setInt("image", 0);
+    
     // 顯示時統一縮放到一定範圍
     // 將(解析度 * voxel size)最高的那側作為分母縮放到512大小 並乘以voxel size
     double max_range = max(df_data.resolution[0] * df_data.voxel_size[0], max(df_data.resolution[1] * df_data.voxel_size[1], df_data.resolution[2] * df_data.voxel_size[2]));
@@ -183,10 +199,10 @@ int main()
     bool is_draw_SOM = true, is_SOM_filled = false;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
-    static int lattice_type = 0, training_type = 0;
-    static bool is_SOM_reset = false, is_SOM_start = false;
-    static const char *elems_names[] = {"position", "texture"};
-    static const char* elem_name = elems_names[training_type];
+    int lattice_type = 0, training_type = 0;
+    LatticesType TEMP = som_data.lattice_type;
+    bool is_SOM_reset = false, is_SOM_start = false;
+    const char *elems_names[] = {"position", "texture"};
 
     // render loop
     // -----------
@@ -267,7 +283,14 @@ int main()
             som_data.setType(CUBE);
             is_SOM_reset = true;
         }
-        if(ImGui::SliderInt("Training type", &training_type, 0, 1, elem_name)) is_SOM_reset;
+        if(ImGui::SliderInt("Training type", &training_type, 0, 1, elems_names[training_type])) {
+            if(training_type == 1 && som_data.lattice_type == CUBE) { // texture // 為了type是CUBE時仍以平面做訓練
+                TEMP = som_data.lattice_type; som_data.setType(SQUARE);
+                SOM.initiateParameters(som_data); som_data.setType(TEMP);
+            } else
+                SOM.initiateParameters(som_data);
+            is_SOM_start = false;
+        }
         if (ImGui::Button("Run")) is_SOM_start = true; ImGui::SameLine();
         if (ImGui::Button("Stop")) is_SOM_start = false;
 
@@ -278,13 +301,18 @@ int main()
         ImGui::Checkbox("Fill", &is_SOM_filled); 
         ImGui::End();
 
-        if(is_SOM_reset) { // 選取目標區域跟改lattice type跟改training type時要reset
+        if(is_SOM_reset) { // 選取目標區域跟改lattice type跟時要reset
             // 取得SOM neuron mesh三角片並初始化
             SOM.initiateParameters(som_data);
             SOM.initiateLattice(input_vector, som_data);
             lattice_vertices = getLatticesVertices(som_data);
             object_lattice.RenewObject(lattice_vertices);
-            
+
+            if(training_type == 1) { // texture // 就為了type是CUBE時仍以平面做訓練
+                TEMP = som_data.lattice_type; som_data.setType(SQUARE);
+                SOM.initiateParameters(som_data); som_data.setType(TEMP);
+            }
+
             is_SOM_start = false;
             is_SOM_reset = false;
         }
@@ -316,23 +344,23 @@ int main()
         // create projection matrix
         glm::mat4 projection = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
 
-        // active shader for shading
-        shader.use();
+        // ---------- active shader for color ----------
+        color_shader.use();
 
         view = camera.GetViewMatrix();
         projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 10000.0f);
-        shader.setMat4("view", view);
-        shader.setMat4("projection", projection);
-        shader.setVec3("lightPos", lightPos);
-        shader.setVec3("viewPos", camera.Position);
+        color_shader.setMat4("view", view);
+        color_shader.setMat4("projection", projection);
+        color_shader.setVec3("lightPos", lightPos);
+        color_shader.setVec3("viewPos", camera.Position);
 
         // 畫模型表面
         if(is_draw_model_surface) {
             glBindVertexArray(object_model.VAO_);
             model = glm::mat4(1.0f);
             model = glm::scale(model, ratio);
-            shader.setMat4("model", model);
-            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArrays(GL_TRIANGLES, 0, object_model.size);
         }
 
@@ -341,8 +369,8 @@ int main()
             glBindVertexArray(object_df_voxel.VAO_);
             model = glm::mat4(1.0f);
             model = glm::scale(model, ratio);
-            shader.setMat4("model", model);
-            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_df_voxel.size, object_df_voxel.instanceCount); 
         }
 
@@ -351,8 +379,8 @@ int main()
             glBindVertexArray(object_input_voxel.VAO_);
             model = glm::mat4(1.0f);
             model = glm::scale(model, ratio);
-            shader.setMat4("model", model);
-            shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_input_voxel.size, object_input_voxel.instanceCount); 
         }
 
@@ -361,21 +389,30 @@ int main()
             glBindVertexArray(cube.VAO_);
             model = glm::scale(glm::mat4(1.0f), ratio);
             model = model * cropMatrix;
-            shader.setMat4("model", model);
-            shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
-            shader.setFloat("opacity", 0.6f);
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
+            color_shader.setFloat("opacity", 0.6f);
             glDepthMask(GL_FALSE); 
             glDrawArrays(GL_TRIANGLES, 0, cube.size);
             glDepthMask(GL_TRUE); 
-            shader.setFloat("opacity", 1.0f);
+            color_shader.setFloat("opacity", 1.0f);
         }
+
+        // ---------- active shader for texture ----------
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        tex_shader.use();
+        tex_shader.setVec3("lightPos", lightPos);
+        tex_shader.setVec3("viewPos", camera.Position);
+        tex_shader.setMat4("view", view);
+        tex_shader.setMat4("projection", projection);
+        tex_shader.setFloat("opacity", 1.0f);
         
         // 畫SOM mesh
         if(is_draw_SOM) {
             glBindVertexArray(object_lattice.VAO_);
             model = glm::scale(glm::mat4(1.0f), ratio);
-            shader.setMat4("model", model);
-            shader.setVec3("color", glm::vec3(1.0, 1.0, 0.8));
+            tex_shader.setMat4("model", model);
             if(is_SOM_filled) {
                 glDrawArrays(GL_TRIANGLES, 0, object_lattice.size);
             }
@@ -386,9 +423,8 @@ int main()
             }
         }
 
-        // active shader for background
+        // ---------- active shader for background ----------
         light_shader.use();
-        light_shader.setVec3("lightPos", lightPos);
         light_shader.setMat4("view", view);
         light_shader.setMat4("projection", projection);
         light_shader.setFloat("opacity", 1.0f);
