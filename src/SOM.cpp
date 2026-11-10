@@ -7,6 +7,7 @@ void SOM_c::initiateParameters(SomData &som_data) {
     for(int i = 0; i < 3; i++)
         resolution[i] = som_data.resolution[i];
     
+    iter_now = 0;
     learning_rate_now = learning_rate_init;
     radius_init = radius_now = max(resolution[0], resolution[1]);
 
@@ -146,9 +147,9 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
 }
 
 // 遍歷mesh找出BMU，距離最小的神經元index
-glm::ivec3 SOM_c::findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_vector)
+glm::ivec3 SOM_c::findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
 {
-    int k = 1;
+    int n = 1;
     double minimum_distance = std::numeric_limits<double>::max();
     glm::ivec3 winner(0, 0, 0);
     
@@ -160,28 +161,27 @@ glm::ivec3 SOM_c::findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_vector)
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
-                double distance = length2(mesh_data[idx] - input_vector);
-                
+                double distance = glm::length(mesh_data[idx] - input_data);
                 if (distance < minimum_distance)
                 {
-                    k = 1;
+                    n = 1;
                     minimum_distance = distance;
-                    winner = glm::vec3(i, j, k);
+                    winner = glm::ivec3(i, j, k);
                 }
                 else if (distance == minimum_distance)
                 {
-                    k++;
+                    n++;
                     double random_value = dis(gen);
 
-                    if(random_value < 1.0 / k)
+                    if(random_value < 1.0 / n)
                     {                    
-                        winner = glm::vec3(i, j, k);
+                        winner = glm::ivec3(i, j, k);
                     }
                 }
             }
         }
     }
-
+    
     return winner;
 }
 
@@ -281,33 +281,28 @@ double SOM_c::calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point)
 // }
 
 // 丟進mesh資料和訓練輸入來進行一次訓練
-void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_vector)
+void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
 {
     // 1. pick a random input vector
 
     // 2. find the best matching unit (BMU)
-    glm::ivec3 BMU = findBMU(mesh_data, input_vector);
+    glm::ivec3 BMU = findBMU(mesh_data, input_data);
     
     // 3. update the radius and learning rate
     radius_now = updateNeighbourhoodRadius();
     learning_rate_now = updateLearningRate();
     
     // 4. update the neighbor nodes
-    // cylindrical_mesh[BMU.x][BMU.y] += (float)learning_rate * (input_vector - cylindrical_mesh[BMU.x][BMU.y]); // 這行好像多此一舉
     for(int k = 0; k < resolution[2]; k++) {
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
                 glm::ivec3 now_point(i, j, k);
                 double influence = calculateInfluence(BMU, now_point);
-                glm::ivec2 distance = BMU - now_point;
-                // if( influence != 0.0){
-                //     cout<<" cylinderical_mesh["<<j<<"]["<<k<<"] influence: "<<influence;
-                //     cout<<"  BMU: "<<BMU.x<<", "<<BMU.y<<endl;
-                // }
-                mesh_data[idx] += (float)influence * (float)learning_rate_now * (input_vector - mesh_data[idx]);
+
+                mesh_data[idx] += (float)influence * (float)learning_rate_now * (input_data - mesh_data[idx]);
             }
         }
     }
-    //cout<<endl;
+    iter_now++;
 }

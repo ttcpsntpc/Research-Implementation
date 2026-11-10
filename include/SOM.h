@@ -31,7 +31,7 @@ struct SomData {
     SomData(int width, int height) {
         resolution[0] = width; 
         resolution[1] = height;
-        resolution[2] = 1; // 預設為cube
+        resolution[2] = 1; // 預設為plane
         
         lattice_type = SQUARE;
 
@@ -80,10 +80,10 @@ public:
 
     void initiateParameters(SomData &som_data);
     void initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data);
-    void runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
+    void runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data);
 
 private:
-    glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_vector);
+    glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data);
     double updateNeighbourhoodRadius();
     double calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point);
     double updateLearningRate();
@@ -92,9 +92,9 @@ private:
 };
 
 // 自己寫，因為新版glm的length2只限定float (為符合glsl)
-inline int length2(glm::ivec3 data) { // for calculate distance
+inline float length2(glm::vec3 data) { // for calculate distance
     return data.x * data.x + data.y * data.y + data.z * data.z;
 };
-inline float length2(glm::vec3 data) { // for calculate distance
+inline int length2(glm::ivec3 data) { // for calculate distance
     return data.x * data.x + data.y * data.y + data.z * data.z;
 };

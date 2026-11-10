@@ -54,6 +54,11 @@ int moveObject = 0; // 在移動光源或是相機
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
 
+random_device rd;
+mt19937 gen(rd());
+uniform_int_distribution<> dis_int; // for training position
+uniform_real_distribution<> dis_real(0.0, 1.0); // for training texcoord
+
 // input擷取框
 glm::vec3 target_translate(100, 100, 150);
 glm::vec3 target_scale(100, 100, 100);
@@ -162,8 +167,6 @@ int main()
     
     SomData som_data(32, 32);
     som_data.setType(SQUARE);
-    SOM.initiateParameters(som_data);
-    
 
     UI.init();
 
@@ -179,6 +182,11 @@ int main()
     bool is_draw_input_BB = true, is_draw_input_voxels = true;
     bool is_draw_SOM = true, is_SOM_filled = false;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
+
+    static int lattice_type = 0, training_type = 0;
+    static bool is_SOM_reset = false, is_SOM_start = false;
+    static const char *elems_names[] = {"position", "texture"};
+    static const char* elem_name = elems_names[training_type];
 
     // render loop
     // -----------
@@ -201,9 +209,10 @@ int main()
         glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // ============================== Imgui ==============================
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
-
+        
         ImGui::Begin("GUI");
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
@@ -213,16 +222,15 @@ int main()
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
             input_vector = getTrainingVoxel(df_data, invCropMatrix);
             object_input_voxel.UpdateInstances(input_vector);
-
-            // 取得SOM mesh三角片並初始化
-            SOM.initiateParameters(som_data);
-            SOM.initiateLattice(input_vector, som_data);
-            lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.RenewObject(lattice_vertices);
+            // 重製亂數範圍
+            int size = input_vector.size();
+            using param_t = std::uniform_int_distribution<int>::param_type; // 用左式取代右式一長串
+            dis_int.param(param_t(0, size - 1));
+            
+            is_SOM_reset = true;
         }
-        ImGui::Checkbox("draw input BB", &is_draw_input_BB); 
-        ImGui::SameLine();
-        ImGui::Checkbox("draw input voxels", &is_draw_input_voxels); 
+        ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
+        ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
 
         
         ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
@@ -236,57 +244,71 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        ImGui::Checkbox("draw model surface faces", &is_draw_model_surface); 
-        ImGui::Checkbox("draw model df-voxels", &is_draw_df_voxels);
-        ImGui::Checkbox("draw model bounding box", &is_draw_bounding_box);
+        ImGui::Checkbox("model surface faces", &is_draw_model_surface); 
+        ImGui::Checkbox("model df-voxels", &is_draw_df_voxels);
+        ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
         ImGui::End();
 
         // SOM
         ImGui::Begin("SOM");
-        static int selected_index = 0;
-        if (ImGui::RadioButton("PLANE", &selected_index, SQUARE)) { 
+        if (ImGui::RadioButton("PLANE", &lattice_type, SQUARE)) { 
             som_data.setType(SQUARE);
-            SOM.initiateParameters(som_data);
-            SOM.initiateLattice(input_vector, som_data);
-            lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.RenewObject(lattice_vertices);
-        }
-        ImGui::SameLine(); // 讓按鈕排在同一行
-        if (ImGui::RadioButton("CYLINDER", &selected_index, CYLINDER)) { 
+            is_SOM_reset = true;
+        } ImGui::SameLine();
+        if (ImGui::RadioButton("CYLINDER", &lattice_type, CYLINDER)) { 
             som_data.setType(CYLINDER);
-            SOM.initiateParameters(som_data);
-            SOM.initiateLattice(input_vector, som_data);
-            lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.RenewObject(lattice_vertices);
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("DONUT", &selected_index, DONUT)) { 
+            is_SOM_reset = true;
+        } ImGui::SameLine();
+        if (ImGui::RadioButton("DONUT", &lattice_type, DONUT)) { 
             som_data.setType(DONUT);
-            SOM.initiateParameters(som_data);
-            SOM.initiateLattice(input_vector, som_data);
-            lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.RenewObject(lattice_vertices);
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("CUBE", &selected_index, CUBE)) { 
+            is_SOM_reset = true;
+        } ImGui::SameLine();
+        if (ImGui::RadioButton("CUBE", &lattice_type, CUBE)) { 
             som_data.setType(CUBE);
-            SOM.initiateParameters(som_data);
-            SOM.initiateLattice(input_vector, som_data);
-            lattice_vertices = getLatticesVertices(som_data);
-            object_lattice.RenewObject(lattice_vertices);
+            is_SOM_reset = true;
         }
+        if(ImGui::SliderInt("Training type", &training_type, 0, 1, elem_name)) is_SOM_reset;
+        if (ImGui::Button("Run")) is_SOM_start = true; ImGui::SameLine();
+        if (ImGui::Button("Stop")) is_SOM_start = false;
 
-        if (ImGui::Button("Run SOM")) {
-        }
-        ImGui::SameLine();
-        ImGui::Text("i: %d", SOM.iter_now);
+        ImGui::Text("iter: %d", SOM.iter_now);
         ImGui::Text("radius: %f", SOM.radius_now);
-        ImGui::Text("learning: %f", SOM.learning_rate_now);
-        ImGui::Checkbox("draw SOM mesh", &is_draw_SOM); 
-        ImGui::Checkbox("filling triangle", &is_SOM_filled); 
+        ImGui::Text("learning rate: %f", SOM.learning_rate_now);
+        ImGui::Checkbox("SOM mesh", &is_draw_SOM); 
+        ImGui::Checkbox("Fill", &is_SOM_filled); 
         ImGui::End();
 
+        if(is_SOM_reset) { // 選取目標區域跟改lattice type跟改training type時要reset
+            // 取得SOM neuron mesh三角片並初始化
+            SOM.initiateParameters(som_data);
+            SOM.initiateLattice(input_vector, som_data);
+            lattice_vertices = getLatticesVertices(som_data);
+            object_lattice.RenewObject(lattice_vertices);
+            
+            is_SOM_start = false;
+            is_SOM_reset = false;
+        }
+        if(is_SOM_start) {
+            if(SOM.iter_now < SOM.iter_max) {
+                for(int i = 0; i < 100; i++) { // 每次迴圈都訓練100次
+                    if(training_type == 0) { // 代表訓練position
+                        glm::vec3 input_pos;
+                        input_pos = input_vector[dis_int(gen)];
+                        SOM.runSOM(som_data.pos, input_pos);
+                    } 
+                    else { // 訓練texture
+                        glm::vec3 input_texcoord = {dis_real(gen), dis_real(gen), 0.0f};
+                        SOM.runSOM(som_data.texcoord, input_texcoord);
+                    }
+                }
+                // 訓練一部分後更新lattice頂點
+                lattice_vertices = getLatticesVertices(som_data);
+                object_lattice.RenewObject(lattice_vertices);
+            }
+            else is_SOM_start = false;
+        }
 
+        // ============================== Rendering ==============================
         // create model matrix
         glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
         // create view matrix

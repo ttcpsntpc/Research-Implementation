@@ -57,7 +57,7 @@ private:
     // --- 視窗開關狀態 ---
     bool m_showTFEditor = false;
     bool m_showDemoWindow = false;
-    bool m_showOtherInfo = true;
+    bool m_showOtherInfo = false;
 
     // --- Transfer Function 變數 ---
     float xRange[2] = {0.0f, 1.0f};

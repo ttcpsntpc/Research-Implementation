@@ -32,3 +32,7 @@ Q: 算表面的函式目前是對整個空間計算，之後要區分陰刻陽�
 	需存原始index、
 透過gradient傳播距離值
 
+
+
+# 筆記
+* c++和c差在 mt比srand還要亂跟長 有random device做為一個好的隨機起點 有distribution做公平分配
