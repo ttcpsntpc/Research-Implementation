@@ -207,6 +207,9 @@ int main()
     LatticesType TEMP = som_data.lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
     const char *elems_names[] = {"position", "texture"};
+
+    int layer = 1;
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -233,6 +236,7 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
+        ImGui::InputInt("model layer (0 ~ x)", &layer);
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
