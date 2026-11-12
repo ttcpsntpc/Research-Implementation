@@ -683,7 +683,7 @@ vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
     
     auto end = steady_clock::now();
     auto diff = duration<double>(end - start);
-    cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
+    cout<<"擷取SOM訓練集時間: "<<diff.count()<<" s\n"<<endl;
     
     return input_vector;
 }
