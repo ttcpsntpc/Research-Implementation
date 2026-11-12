@@ -15,7 +15,7 @@ using namespace std;
 #define PI 3.14159265359
 
 enum LatticesType {
-    SQUARE, CUBE, CYLINDER, DONUT
+    SQUARE, CYLINDER, DONUT, CUBE
 };
 // CUBE sequence: 按照 x(0~1), y(0~1), z(0~1)
 //   4          back
@@ -72,17 +72,20 @@ public:
 
     double radius_init, radius_now;
 
+    int training_type = 0; // 0: position, 1: texcoord
     LatticesType lattice_type = CUBE; // 如果是訓練texture就一律設定為SQUARE
     
     // 只給texture用 或許可改?
-    glm::ivec2 *anchor_points_idx = NULL; // 表index 
-    glm::vec2 *anchor_points_texcoord = NULL; // 表texcoord
+    glm::ivec3 *anchor_points_idx = NULL; // 表index 
+    glm::vec3 *anchor_points_texcoord = NULL; // 表texcoord
+    int anchor_value = 1000; // 錨定值，代表n次迭代內一定會遇到第五個錨定點
 
     void initiateParameters(SomData &som_data);
     void initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data);
     void runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data);
 
 private:
+    glm::ivec3 BMU;
     glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data);
     double updateNeighbourhoodRadius();
     double calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point);

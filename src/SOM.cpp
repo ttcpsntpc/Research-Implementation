@@ -7,23 +7,25 @@ void SOM_c::initiateParameters(SomData &som_data) {
     lattice_type = som_data.lattice_type;
     for(int i = 0; i < 3; i++)
         resolution[i] = som_data.resolution[i];
-    
+    if(training_type) { // training texcoord
+        resolution[2] = 1;
+    }
+
     iter_now = 0;
     learning_rate_now = learning_rate_init;
     radius_init = radius_now = max(resolution[0], resolution[1]);
 
     if(anchor_points_idx == NULL) { // 只有第一次要初始化 之後可透過使用者修改
-        anchor_points_idx = new glm::ivec2[5];
-        anchor_points_idx[0] = glm::ivec2(0, 0);
-        anchor_points_idx[1] = glm::ivec2(resolution[0] - 1, 0);
-        anchor_points_idx[2] = glm::ivec2(resolution[0] - 1, resolution[1] - 1);
-        anchor_points_idx[3] = glm::ivec2(0, resolution[1] - 1);
-        anchor_points_idx[4] = glm::ivec2((resolution[0] - 1) / 2, (resolution[1] - 1) / 2);
+        anchor_points_idx = new glm::ivec3[5];
+        anchor_points_idx[0] = glm::ivec3(0, 0, 0);
+        anchor_points_idx[1] = glm::ivec3(resolution[0] - 1, 0, 0);
+        anchor_points_idx[2] = glm::ivec3(resolution[0] - 1, resolution[1] - 1, 0);
+        anchor_points_idx[3] = glm::ivec3(0, resolution[1] - 1, 0);
+        anchor_points_idx[4] = glm::ivec3((resolution[0] - 1) / 2, (resolution[1] - 1) / 2, 0);
 
-        anchor_points_texcoord = new glm::vec2[5];
-        for(int j = 0; j < 5; j++) {
-            anchor_points_texcoord[j] = glm::ivec2(anchor_points_idx[j].x / (resolution[0] - 1), anchor_points_idx[j].y / (resolution[1] - 1));
-        }
+        anchor_points_texcoord = new glm::vec3[5];
+        for(int j = 0; j < 5; j++) 
+            anchor_points_texcoord[j] = glm::vec3((float)anchor_points_idx[j].x / (resolution[0] - 1), (float)anchor_points_idx[j].y / (resolution[1] - 1), 0);
     }
 }
 
@@ -224,7 +226,7 @@ glm::ivec3 SOM_c::calculateCubeIndexPos(glm::ivec3 idx) {
 double SOM_c::calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point)
 {
     double distance = 0.0;
-    if(lattice_type == SQUARE) {
+    if(lattice_type == SQUARE || training_type == 1) { // lattices = PLANE or 訓練texcoord
         distance = length2(BMU - now_point);
     } 
     else if(lattice_type == CYLINDER) {
@@ -285,11 +287,18 @@ double SOM_c::calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point)
 // 丟進mesh資料和訓練輸入來進行一次訓練
 void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
 {
+    iter_now++;
     // 1. pick a random input vector
 
     // 2. find the best matching unit (BMU)
-    glm::ivec3 BMU = findBMU(mesh_data, input_data);
+    if((training_type) && (iter_now % anchor_value == 0)) { // 次數符合錨定值時
+        BMU = anchor_points_idx[4]; // BMU直接設為中間的錨定點
+        input_data = anchor_points_texcoord[4]; // 並把Input設為中間的anchor texcoord
+    }
+    else 
+        BMU = findBMU(mesh_data, input_data);
     
+
     // 3. update the radius and learning rate
     radius_now = updateNeighbourhoodRadius();
     learning_rate_now = updateLearningRate();
@@ -299,14 +308,19 @@ void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
     for(int k = 0; k < resolution[2]; k++) {
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
-                int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
                 glm::ivec3 now_point(i, j, k);
                 double influence = calculateInfluence(BMU, now_point);
                 if(influence < 1e-5)
-                    influence = 0;
+                    continue; // 視為0
+                int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
                 mesh_data[idx] += (float)influence * (float)learning_rate_now * (input_data - mesh_data[idx]);
             }
         }
     }
-    iter_now++;
+    if(training_type) {
+        for(int i = 0; i < 5; i++) {
+            int idx = anchor_points_idx[i][1] * resolution[0] + anchor_points_idx[i][0];
+            mesh_data[idx] = anchor_points_texcoord[i];
+        }
+    }
 }

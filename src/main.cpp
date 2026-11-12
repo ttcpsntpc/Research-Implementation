@@ -203,7 +203,7 @@ int main()
     bool is_draw_SOM = true, is_SOM_filled = false;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
-    int lattice_type = 0, training_type = 0;
+    int lattice_type;
     LatticesType TEMP = som_data.lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
     const char *elems_names[] = {"position", "texture"};
@@ -286,13 +286,12 @@ int main()
             som_data.setType(CUBE);
             is_SOM_reset = true;
         }
-        if(ImGui::SliderInt("Training type", &training_type, 0, 1, elems_names[training_type])) {
-            if(training_type == 1 && som_data.lattice_type == CUBE) { // texture // 為了type是CUBE時仍以平面做訓練
-                TEMP = som_data.lattice_type; som_data.setType(SQUARE);
-                SOM.initiateParameters(som_data); som_data.setType(TEMP);
-            } else
-                SOM.initiateParameters(som_data);
+        if(ImGui::SliderInt("Training type", &SOM.training_type, 0, 1, elems_names[SOM.training_type])) {
+            SOM.initiateParameters(som_data);
             is_SOM_start = false;
+        }
+        if(SOM.training_type) {
+            ImGui::InputInt("anchor value (>=1)", &SOM.anchor_value, 100, 1000);
         }
         if (ImGui::Button("Run")) is_SOM_start = true; ImGui::SameLine();
         if (ImGui::Button("Stop")) is_SOM_start = false;
@@ -305,17 +304,12 @@ int main()
         ImGui::End();
 
         // ============================== Control operation ==============================
-        if(is_SOM_reset) { // 選取目標區域跟改lattice type跟時要reset
+        if(is_SOM_reset) { // 選取目標區域跟改lattice type時要reset
             // 取得SOM neuron mesh三角片並初始化
             SOM.initiateParameters(som_data);
             SOM.initiateLattice(input_vector, som_data);
             lattice_vertices = getLatticesVertices(som_data);
             object_lattice.RenewObject(lattice_vertices);
-
-            if(training_type == 1) { // texture // 就為了type是CUBE時仍以平面做訓練
-                TEMP = som_data.lattice_type; som_data.setType(SQUARE);
-                SOM.initiateParameters(som_data); som_data.setType(TEMP);
-            }
 
             total_time = steady_clock::duration::zero();
             is_SOM_start = false;
@@ -325,7 +319,7 @@ int main()
             if(SOM.iter_now < SOM.iter_max) {
                 auto start = steady_clock::now();
                 for(int i = 0; i < 100; i++) { // 每次迴圈都訓練100次
-                    if(training_type == 0) { // 代表訓練position
+                    if(SOM.training_type == 0) { // 代表訓練position
                         glm::vec3 input_pos;
                         input_pos = input_vector[dis_int(gen)];
                         SOM.runSOM(som_data.pos, input_pos);
