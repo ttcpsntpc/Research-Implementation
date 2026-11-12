@@ -44,11 +44,11 @@ VecData ReadVecFile(const char *vec_filename)
     ifs.close();
 
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
+    auto diff = duration<double>(end - start);
 
     cout<<"vector resolution: "<<vec_file.resolution[0]<<" "<<vec_file.resolution[1]<<endl;
     cout<<"max speed: "<<vec_file.max_speed<<endl;
-    cout<<"讀vec檔時間: "<<diff.count()<<" ms\n"<<endl;
+    cout<<"讀vec檔時間: "<<diff.count()<<" s\n"<<endl;
     return vec_file;
 }
 
@@ -146,8 +146,8 @@ bool ReadInfFile(const char *inf_filename, VolumeData &volume_data)
     }
     
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀inf檔時間: "<<diff.count()<<" ms\n"<<endl;
+    auto diff = duration<double>(end - start);
+    cout<<"讀inf檔時間: "<<diff.count()<<" s\n"<<endl;
 
     return true;
 }
@@ -237,8 +237,8 @@ bool ReadRawFile(const char *raw_filename, VolumeData &volume_data, bool isNorma
     } else volume_data.voxel_data = temp_double_data;
     
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀raw檔時間: "<<diff.count()<<" ms\n"<<endl;
+    auto diff = duration<double>(end - start);
+    cout<<"讀raw檔時間: "<<diff.count()<<" s\n"<<endl;
 
     return true;
 }
@@ -599,8 +599,8 @@ TxtData ReadTxtFile(const char *txt_filename)
     txt_data.min = min_temp;
 
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
-    cout<<"讀txt檔時間: "<<diff.count()<<" ms\n"<<endl;
+    auto diff = duration<double>(end - start);
+    cout<<"讀txt檔時間: "<<diff.count()<<" s\n"<<endl;
 
     return txt_data;
 }
@@ -833,7 +833,7 @@ VolumeData ReadStlFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
     ifs.close();
 
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
+    auto diff = duration<double>(end - start);
 
     cout << "STL File Format: " << (is_binary ? "Binary" : "ASCII") <<endl;
 
@@ -925,7 +925,7 @@ VolumeData ReadObjFile(const char *stl_filename, vector<Vertex_c> *vertices_tri)
     ifs.close();
 
     auto end = steady_clock::now();
-    auto diff = duration_cast<milliseconds>(end - start);
+    auto diff = duration<double>(end - start);
     
 
     cout << "Bounding Box Min: (" << obj_data.min.x << ", " << obj_data.min.y << ", " << obj_data.min.z << ")" << endl;

@@ -1,3 +1,4 @@
+#include <omp.h>
 #include "SOM.h"
 
 
@@ -36,7 +37,7 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
     glm::vec3 size = max - min; // 轉成float比較方便使用
     glm::vec3 center = glm::vec3(min.x + size.x / 2, min.y + size.y / 2, min.z + size.z / 2);
     double x, y, z;
-    double ratio = 1.2; // 讓lattice不要太貼而乘上一個倍率
+    double ratio_i, ratio_j;
     min -= size * 0.2f;
     max += size * 0.2f;
     size = max - min;
@@ -86,8 +87,8 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
     else if(lattice_type == CUBE) {
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
-                double ratio_i = (double)i / (resolution[0] - 1);
-                double ratio_j = (double)j / (resolution[1] - 1);
+                ratio_i = (double)i / (resolution[0] - 1);
+                ratio_j = (double)j / (resolution[1] - 1);
 
                 // y-z plane left
                 x = min.x;
@@ -161,7 +162,8 @@ glm::ivec3 SOM_c::findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
-                double distance = glm::length(mesh_data[idx] - input_data);
+                glm::vec3 diff = mesh_data[idx] - input_data;
+                double distance = glm::dot(diff, diff);
                 if (distance < minimum_distance)
                 {
                     n = 1;
@@ -293,13 +295,15 @@ void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
     learning_rate_now = updateLearningRate();
     
     // 4. update the neighbor nodes
+    #pragma omp parallel for collapse(3)
     for(int k = 0; k < resolution[2]; k++) {
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 int idx = k * resolution[1] * resolution[0] + j * resolution[0] + i;
                 glm::ivec3 now_point(i, j, k);
                 double influence = calculateInfluence(BMU, now_point);
-
+                if(influence < 1e-5)
+                    influence = 0;
                 mesh_data[idx] += (float)influence * (float)learning_rate_now * (input_data - mesh_data[idx]);
             }
         }

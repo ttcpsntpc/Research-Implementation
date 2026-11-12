@@ -29,8 +29,10 @@
 #include <algorithm>
 #include <thread>
 #include <random>
+#include <chrono>
 
 using namespace std;
+using namespace chrono;
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
@@ -53,7 +55,9 @@ int moveObject = 0; // 在移動光源或是相機
 // timing
 float deltaTime = 0.0f; // time between current frame and last frame
 float lastFrame = 0.0f;
+steady_clock::duration total_time;
 
+// random
 random_device rd;
 mt19937 gen(rd());
 uniform_int_distribution<> dis_int; // for training position
@@ -203,7 +207,6 @@ int main()
     LatticesType TEMP = som_data.lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
     const char *elems_names[] = {"position", "texture"};
-
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -301,6 +304,7 @@ int main()
         ImGui::Checkbox("Fill", &is_SOM_filled); 
         ImGui::End();
 
+        // ============================== Control operation ==============================
         if(is_SOM_reset) { // 選取目標區域跟改lattice type跟時要reset
             // 取得SOM neuron mesh三角片並初始化
             SOM.initiateParameters(som_data);
@@ -313,11 +317,13 @@ int main()
                 SOM.initiateParameters(som_data); som_data.setType(TEMP);
             }
 
+            total_time = steady_clock::duration::zero();
             is_SOM_start = false;
             is_SOM_reset = false;
         }
         if(is_SOM_start) {
             if(SOM.iter_now < SOM.iter_max) {
+                auto start = steady_clock::now();
                 for(int i = 0; i < 100; i++) { // 每次迴圈都訓練100次
                     if(training_type == 0) { // 代表訓練position
                         glm::vec3 input_pos;
@@ -329,11 +335,17 @@ int main()
                         SOM.runSOM(som_data.texcoord, input_texcoord);
                     }
                 }
+                auto end = steady_clock::now();
+                total_time += end - start;
                 // 訓練一部分後更新lattice頂點
                 lattice_vertices = getLatticesVertices(som_data);
                 object_lattice.RenewObject(lattice_vertices);
             }
-            else is_SOM_start = false;
+            else {
+                cout<<"SOM訓練時間: "<<duration<double>(total_time).count()<<" s\n"<<endl;
+                total_time = steady_clock::duration::zero();
+                is_SOM_start = false;
+            }
         }
 
         // ============================== Rendering ==============================
@@ -601,7 +613,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 // 找模型表面體素，取得繪製體素的表面
 // 或許可增進功能?
 void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
-    
+    auto start = steady_clock::now();
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
     auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset) {
         size_t old_size = vertex.size();
@@ -641,11 +653,15 @@ void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
             }
         }
     }
+    auto end = steady_clock::now();
+    auto diff = duration<double>(end - start);
+    cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
 }
 
 // 找在範圍內的模型表面體素，當作SOM input
 vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
     vector<glm::vec3> input_vector;
+    auto start = steady_clock::now();
     
     for(int i = 0; i < df_data.resolution[0]; i++) {
         for(int j = 0; j < df_data.resolution[1]; j++) {
@@ -664,6 +680,11 @@ vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
             }
         }
     }
+    
+    auto end = steady_clock::now();
+    auto diff = duration<double>(end - start);
+    cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
+    
     return input_vector;
 }
 

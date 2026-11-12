@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 project("Practice")
 find_package(OpenGL REQUIRED)
+find_package(OpenMP REQUIRED)
 add_executable(Practice)
 add_subdirectory(extern)
 
@@ -31,6 +32,7 @@ target_link_libraries( Practice PRIVATE
     glm::glm # add_subdirectory(ext/glm)
     glfw  # find_package(glfw3 REQUIRED)
     OpenGL::GL # find_package(OpenGL REQUIRED)
+    OpenMP::OpenMP_CXX
 )
 
 add_custom_command( TARGET Practice POST_BUILD
