@@ -211,11 +211,11 @@ glm::ivec3 SOM_c::calculateCubeIndexPos(glm::ivec3 idx) {
     else if(face_idx == 2)
         pos = {idx.x, 0, idx.y};
     else if(face_idx == 3)
-        pos = {idx.x, resolution[1], idx.y};
+        pos = {idx.x, resolution[0] - 1, idx.y};
     else if(face_idx == 4)
         pos = {idx.x, idx.y, 0};
     else if(face_idx == 5)
-        pos = {idx.x, idx.y, resolution[2]};
+        pos = {idx.x, idx.y, resolution[0] - 1};
 
     return pos;
 }
