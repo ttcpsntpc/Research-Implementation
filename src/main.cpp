@@ -18,6 +18,7 @@
 #include "UIManager.h"
 #include "distance_field_3D.h"
 #include "SOM.h"
+#include "two_step_mapping.h"
 
 #include <iostream>
 #include <string>
@@ -40,7 +41,7 @@ void processInput(GLFWwindow *window);
 
 // extra function
 void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex);
-vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix);
+vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
 
 // settings
@@ -78,6 +79,7 @@ vector<Vertex_c> lattice_vertices;
 DistanceField3D DF;
 UIManager UI;
 SOM_c SOM;
+vector<LayerVoxels> layers_voxels;
 
 void updateCropMatrix() {
     scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
@@ -243,7 +245,8 @@ int main()
         if(ImGui::Button("get input voxel")) {
             // 取得training voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-            input_vector = getTrainingVoxel(df_data, invCropMatrix);
+            layers_voxels = getLayerVoxel(df_data, invCropMatrix, layer);
+            input_vector = layers_voxels[0].pos;
             object_input_voxel.UpdateInstances(input_vector);
             // 重製亂數範圍
             int size = input_vector.size();
@@ -656,34 +659,35 @@ void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
     cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
 }
 
-// 找在範圍內的模型表面體素，當作SOM input
-vector<glm::vec3> getTrainingVoxel(VolumeData &df_data, glm::mat4 matrix) {
-    vector<glm::vec3> input_vector;
+// 找在範圍內的模型每層距離值的體素，其中距離值為0即代表SOM訓練input
+vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer) {
+    vector<LayerVoxels> layers_voxels(layer);
     auto start = steady_clock::now();
     
     for(int i = 0; i < df_data.resolution[0]; i++) {
         for(int j = 0; j < df_data.resolution[1]; j++) {
             for(int k = 0; k < df_data.resolution[2]; k++) {
-                if(df_data(i, j, k) == 0) { // 可改進，讓真正在表面的體素才納入
-                    glm::vec4 voxel(i + 0.5f, j + 0.5f, k + 0.5f, 1.0f); // model space
-                    glm::vec4 local_space = matrix * voxel; // transform to LCS
-                    glm::vec3 local_pos = glm::vec3(local_space) / local_space.w; // get local position
-                    
-                    // 直接檢查是否在 0~1 內
-                    if (local_pos.x >= 0.0f && local_pos.x <= 1.0f &&
-                        local_pos.y >= 0.0f && local_pos.y <= 1.0f &&
-                        local_pos.z >= 0.0f && local_pos.z <= 1.0f)  
-                        input_vector.push_back(glm::vec3(i, j, k));
+                glm::vec4 voxel(i + 0.5f, j + 0.5f, k + 0.5f, 1.0f); // model space
+                glm::vec4 local_space = matrix * voxel; // transform to LCS
+                glm::vec3 local_pos = glm::vec3(local_space) / local_space.w; // get local position
+                
+                // 直接檢查是否在LCS的 0~1 內
+                if (local_pos.x >= 0.0f && local_pos.x <= 1.0f && local_pos.y >= 0.0f && local_pos.y <= 1.0f && local_pos.z >= 0.0f && local_pos.z <= 1.0f) {
+                    for(int l = 0; l < layer; l++) {
+                        if(df_data(i, j, k) == l)
+                            layers_voxels[l].pos.push_back({i, j, k});
+                    }
                 }
             }
         }
     }
-    
+    for(int i = 0; i < layer; i++)
+        cout<<"layer"<<" "<<i<<": "<<layers_voxels[i].pos.size()<<endl;
+        
     auto end = steady_clock::now();
     auto diff = duration<double>(end - start);
-    cout<<"擷取SOM訓練集時間: "<<diff.count()<<" s\n"<<endl;
-    
-    return input_vector;
+    cout<<"擷取所有層之體素時間: "<<diff.count()<<" s\n"<<endl;
+    return layers_voxels;
 }
 
 // 得到lattice的mesh頂點資訊
