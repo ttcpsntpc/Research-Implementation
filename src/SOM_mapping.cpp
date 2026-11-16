@@ -157,6 +157,7 @@ glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
 
 // 對每一層的體素都做兩階段映射算出顏色值
 void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data) {
+    auto start = steady_clock::now();
     int size = layer_voxels.pos.size();
     layer_voxels.color.resize(size);
 
@@ -165,4 +166,9 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data) {
         voxel += glm::vec3{0.5f, 0.5f, 0.5f};
         glm::vec2 texcoord = SOMMapping(voxel, som_data);
     }
+
+    
+    auto end = steady_clock::now();
+    auto diff = duration<double>(end - start);
+    cout<<"兩階段映射時間: "<<diff.count()<<" s\n"<<endl;
 }
