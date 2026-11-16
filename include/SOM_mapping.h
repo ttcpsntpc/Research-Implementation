@@ -25,8 +25,13 @@ struct LayerVoxels { // 擷取範圍中每一層距離值的體素
 };
 
 glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data);
+bool inTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
+glm::vec3 outerProjp(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
+glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 p, SomData &som_data);
 void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data); // 算出LayerVoxels的color
+glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data);
 
+extern glm::ivec3 offset[5]; // for BMU相鄰的三角形
 extern TexFilter tex_filter;
 extern SizeFilter size_filter;
 #endif

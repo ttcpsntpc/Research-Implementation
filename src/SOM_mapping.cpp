@@ -1,4 +1,9 @@
+#include <chrono>
 #include "SOM_mapping.h"
+
+using namespace chrono;
+
+glm::ivec3 offset[5] = {{1, 0, 0}, {0, 1, 0}, {-1, 0, 0}, {0, -1, 0}, {1, 0, 0}}; // for BMU相鄰的三角形
 
 glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data) {
     int n = 1;
@@ -38,10 +43,126 @@ glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data) {
     return winner;
 }
 
+// porjp是不是在o(BMU), a, b連成的三角形中
+bool inTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp) {
+    // 法1: 用面積比
+    float area_ab = glm::length(glm::cross(a - projp, b - projp));
+    float area_bo = glm::length(glm::cross(b - projp, o - projp));
+    float area_oa = glm::length(glm::cross(o - projp, a - projp));
+    float total_area = glm::length(glm::cross(a - o, b - o));
+
+    if(fabs(total_area - (area_ab + area_bo + area_oa)) < 1e-5f) // 面積加起來大約相等
+        return true;
+    return false;
+    // 法2: 在內部代表被projp分三塊的三角形法向量都要同向
+    // glm::vec3 normal_ab = glm::cross(a - projp, b - projp);
+    // glm::vec3 normal_bo = glm::cross(b - projp, o - projp);
+    // glm::vec3 normal_oa = glm::cross(o - projp, a - projp);
+    // glm::vec3 normal = glm::cross(a - o, b - o);
+    // float c1 = glm::dot(normal_ab, normal);
+    // float c2 = glm::dot(normal_bo, normal);
+    // float c3 = glm::dot(normal_oa, normal);
+    // if ((c1 >= 0.0f && c2 >= 0.0f && c3 >= 0.0f) || 
+    //     (c1 <= 0.0f && c2 <= 0.0f && c3 <= 0.0f)) // 處理了面積為0的情況
+    //     return true;
+    // return false;
+}
+
+// 投影點在三角形外面就投影到邊上
+glm::vec3 outerProjp(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp) {
+    glm::vec3 projp_on_a, projp_on_b;
+    double dist_a, dist_b;
+    glm::vec3 oprojp = projp - o;
+
+    // assume在oa外
+    glm::vec3 oa = a - o;
+    double length2 = oa.x * oa.x + oa.y * oa.y;
+    float r = glm::dot(oa, oprojp) / length2;
+    if(r > 1.0f)
+        projp_on_a = a;
+    else if(r < 0.0f)
+        projp_on_a = o;
+    else
+        projp_on_a = o + r * oa;
+    dist_a = glm::length(projp_on_a - projp); // 跟原本的projp比會比跟BMU比準，因為projp垂直三角形，BMU沒有，無法推斷正確距離
+    
+    // assume在ob外
+    glm::vec3 ob = b - o;
+    length2 = ob.x * ob.x + ob.y * ob.y;
+    r = glm::dot(ob, oprojp) / length2;
+    if(r > 1.0f)
+        projp_on_b = b;
+    else if(r < 0.0f)
+        projp_on_b = o;
+    else
+        projp_on_b = o + r * ob;
+    dist_b = glm::length(projp_on_b - projp);
+
+    if(dist_a < dist_b)
+        return projp_on_a;
+    else 
+        return projp_on_b;
+}
+
+// 找正確的投影點
+glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 p, SomData &som_data) {
+    glm::vec3 normal = glm::normalize(glm::cross(a - o, b - o));
+    glm::vec3 op = p - o;
+
+    // find initial projection point
+    glm::vec3 d = -(glm::dot(op, normal)) * normal;
+    glm::vec3 projp = p + d;
+
+    // check projection point
+    if(!inTriangle(a, b, o, projp))
+        projp = outerProjp(a, b, o, projp);
+    return projp;
+}
+
+// 在BMU鄰近三角片中找與input最短距離的投影點的texcoord
+glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
+    glm::ivec3 BMU = findPosBMU(som_data, voxel);
+    double min_distance = numeric_limits<double>::max();
+    glm::vec2 texcoord;
+
+    for(int i = 0; i < 4; i++) {
+        // 三角形頂點index
+        glm::ivec3 A = BMU + offset[i];
+        glm::ivec3 B = BMU + offset[i + 1];
+        // 超出範圍就跳過這個三角形
+        if(A.x < 0 || A.x > som_data.resolution[0] - 1 || A.y < 0 || A.y > som_data.resolution[1] - 1 ||
+           B.x < 0 || B.x > som_data.resolution[0] - 1 || B.y < 0 || B.y > som_data.resolution[1] - 1)
+            continue;
+        // 取得三角形位置
+        glm::vec3 a = som_data(A.x, A.y, A.z);
+        glm::vec3 b = som_data(B.x, B.y, B.z);
+        glm::vec3 o = som_data(BMU.x, BMU.y, BMU.z);
+        // 得到投影點
+        glm::vec3 projp = getTriangleProjectionPoint(a, b, o, voxel, som_data);
+
+        double distance = (projp.x - voxel.x) * (projp.x - voxel.x) + (projp.y - voxel.y) * (projp.y - voxel.y) + (projp.z - voxel.z) * (projp.z - voxel.z);
+        if(distance >= min_distance) // 比現在最小距離值大代表不採用這個三角形的投影點
+            continue;
+        min_distance = distance;
+
+        // 按照三角形頂點與面積計算texcoord
+        float area_ab = glm::length(glm::cross(a - projp, b - projp));
+        float area_bo = glm::length(glm::cross(b - projp, o - projp));
+        float area_oa = glm::length(glm::cross(o - projp, a - projp));
+        float total_area = glm::length(glm::cross(a - o, b - o));
+        texcoord = som_data(BMU.x, BMU.y) * (area_ab / total_area) + som_data(A.x, A.y) * (area_bo / total_area) + som_data(B.x, B.y) * (area_oa / total_area);
+    }
+    return texcoord;
+}
+
+// 對每一層的體素都做兩階段映射算出顏色值
 void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data) {
-    glm::ivec3 pos_BMU;
-    for(auto voxel : layer_voxels.pos) {
+    int size = layer_voxels.pos.size();
+    layer_voxels.color.resize(size);
+
+    for(int i = 0; i < size; i++) {
+        glm::vec3 voxel = layer_voxels.pos[i];
         voxel += glm::vec3{0.5f, 0.5f, 0.5f};
-        pos_BMU = findPosBMU(som_data, voxel);
+        glm::vec2 texcoord = SOMMapping(voxel, som_data);
     }
 }

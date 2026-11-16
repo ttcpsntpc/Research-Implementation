@@ -27,11 +27,13 @@ Q: 算表面的函式目前是對整個空間計算，之後要區分陰刻陽�
 				目前應該選1比較不用想那麼多
 
 # texture mapping
-到distance=0
-	另外儲存distance=0的voxels
-	需存原始index、
-透過gradient傳播距離值
+用gradient傳遞顏色值
 
+# carving
+拿到擷取區域的模型表面顏色後做雕刻 -> 要畫出顏色的話特別用一個三維陣列紀錄顏色，畫出時根據顏色存到頂點陣列中
+1. copy df_data to df_carved and df_carved_background
+2. df_carved將 0~layer-2 的voxels做雕刻並設為模型
+	df_carved_background將 layer-1 那層的voxels設為模型，原本為模型的則變空氣
 
 
 # 筆記
