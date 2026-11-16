@@ -20,6 +20,7 @@ target_sources( Practice PRIVATE
     "src/read_file.cpp"
     "src/distance_field_3D.cpp"
     "src/SOM.cpp"
+    "src/SOM_mapping.cpp"
 )
 
 target_include_directories( Practice PRIVATE

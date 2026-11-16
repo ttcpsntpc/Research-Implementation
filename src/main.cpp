@@ -18,7 +18,7 @@
 #include "UIManager.h"
 #include "distance_field_3D.h"
 #include "SOM.h"
-#include "two_step_mapping.h"
+#include "SOM_mapping.h"
 
 #include <iostream>
 #include <string>
@@ -40,7 +40,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 void processInput(GLFWwindow *window);
 
 // extra function
-void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex);
+vector<Vertex_c> getModelSurface(VolumeData &df_data);
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
 
@@ -164,8 +164,7 @@ int main()
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
 
     // 取得體素表面頂點
-    vector<Vertex_c> voxel_vertex;
-    getModelSurface(df_data, voxel_vertex);
+    vector<Vertex_c> voxel_vertex = getModelSurface(df_data);
     Object_c object_model;
     object_model.CreateObject(voxel_vertex, {});
 
@@ -613,7 +612,8 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 // 找模型表面體素，取得繪製體素的表面
 // 或許可增進功能?
-void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
+vector<Vertex_c> getModelSurface(VolumeData &df_data) {
+    vector<Vertex_c> vertex;
     auto start = steady_clock::now();
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
     auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset) {
@@ -657,6 +657,8 @@ void getModelSurface(VolumeData &df_data, vector<Vertex_c> &vertex) {
     auto end = steady_clock::now();
     auto diff = duration<double>(end - start);
     cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
+
+    return vertex;
 }
 
 // 找在範圍內的模型每層距離值的體素，其中距離值為0即代表SOM訓練input

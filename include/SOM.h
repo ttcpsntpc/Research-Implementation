@@ -1,3 +1,6 @@
+#ifndef SOM_H
+#define SOM_H
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -101,3 +104,5 @@ inline float length2(glm::vec3 data) { // for calculate distance
 inline int length2(glm::ivec3 data) { // for calculate distance
     return data.x * data.x + data.y * data.y + data.z * data.z;
 };
+
+#endif
