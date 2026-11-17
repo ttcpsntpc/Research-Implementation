@@ -16,7 +16,7 @@ enum TexFilter {
 
 enum SizeFilter {
     MINIFICATION,
-    MAGNIFICATON
+    MAGNIFICATION
 };
 
 struct LayerVoxels { // 擷取範圍中每一層距離值的體素

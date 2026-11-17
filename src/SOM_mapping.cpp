@@ -4,7 +4,7 @@
 using namespace chrono;
 
 TexFilter tex_filter = LINEAR;
-SizeFilter size_filter = MAGNIFICATON;
+SizeFilter size_filter = MAGNIFICATION;
 glm::ivec3 offset[5] = {{1, 0, 0}, {0, 1, 0}, {-1, 0, 0}, {0, -1, 0}, {1, 0, 0}}; // for BMU相鄰的三角形
 
 glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data) {
@@ -172,15 +172,15 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
         if(tex_filter == NEAREST) { 
             glm::ivec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1) + 0.5f); // 四捨五入 + 轉型
             // 取得0~255值後四捨五入，再轉回0~1
-            layer_voxels.color[i] = image[texel_index.x][texel_index.y];
+            layer_voxels.color[i] = image[texel_index.y][texel_index.x];
         } 
         else if(tex_filter == LINEAR) { 
             if(width * height < size)
-                size_filter = MAGNIFICATON;
+                size_filter = MAGNIFICATION;
             else 
                 size_filter = MINIFICATION;
             glm::vec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1));
-            if(size_filter == MAGNIFICATON) {
+            if(size_filter == MAGNIFICATION) {
                 glm::ivec2 texel_IJ = (glm::ivec2)texel_index; // 左下角texel
                 float dx = texel_index.x - texel_IJ.x;
                 float dy = texel_index.y - texel_IJ.y;
@@ -189,38 +189,43 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                     offset[0] = 0;
                 if(texel_IJ.y == height - 1)
                     offset[1] = 0;
-                glm::vec3 c00 = image[texel_IJ.x][texel_IJ.y];
-                glm::vec3 c10 = image[texel_IJ.x + offset[0]][texel_IJ.y];
-                glm::vec3 c11 = image[texel_IJ.x + offset[0]][texel_IJ.y + offset[1]];
-                glm::vec3 c01 = image[texel_IJ.x][texel_IJ.y + offset[1]];
+                glm::vec3 c00 = image[texel_IJ.y][texel_IJ.x];
+                glm::vec3 c10 = image[texel_IJ.y][texel_IJ.x + offset[0]];
+                glm::vec3 c11 = image[texel_IJ.y + offset[1]][texel_IJ.x + offset[1]];
+                glm::vec3 c01 = image[texel_IJ.y + offset[1]][texel_IJ.x];
                 layer_voxels.color[i] = (1 - dx) * (1 - dy) * c00 + dx * (1 - dy) * c10 + (1 - dx) * dy * c01 + dx * dy * c11;
             }
             else if(size_filter == MINIFICATION) {
                 // texcoord
                 glm::vec2 texcoord_000 = SOMMapping(voxel_index, som_data); // 體素左下後點映射後的texcoord
                 glm::vec2 texcoord_111 = SOMMapping(voxel_index + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
-                // texture map index
-                glm::vec2 texel_index_000 = (texcoord_000 * glm::vec2(width - 1, height - 1));
-                glm::vec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1));
-                // start and end point of texture map index // 四捨五入 + 轉型
-                glm::ivec2 t0 = texel_index_000;
-                glm::ivec2 t1 = texel_index_111 + 0.5f;
+                // texture map index // 四捨五入 + 轉型
+                glm::ivec2 texel_index_000 = (texcoord_000 * glm::vec2(width - 1, height - 1));
+                glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
+                // start and end point of texture map index
+                glm::ivec2 t0 = glm::min(texel_index_000, texel_index_111);
+                glm::ivec2 t1 = glm::max(texel_index_000, texel_index_111);
                 // box filter
                 int num = 0;
                 glm::vec3 color = {0.0f, 0.0f, 0.0f};
-                for(int j = t0.y; j < t1.y; j++) {
-                    for(int i = t0.x; i < t1.x; i++) {
+                for(int j = t0.y; j <= t1.y; j++) {
+                    for(int i = t0.x; i <= t1.x; i++) {
                         color += image[j][i];
                         num++;
                     }
                 }
+                if(num < 3)
+                    cout<<num;
                 color /= num;
                 layer_voxels.color[i] = color;
             }
         }
     }
-
-    
+    cout<<"texture filter: ";
+    if(size_filter == MAGNIFICATION)
+        cout<<"MAGNIFICATION"<<endl;
+    else if(size_filter == MINIFICATION)
+        cout<<"MINIFICATION"<<endl;
     auto end = steady_clock::now();
     auto diff = duration<double>(end - start);
     cout<<"兩階段映射時間: "<<diff.count()<<" s\n"<<endl;

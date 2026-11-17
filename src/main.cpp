@@ -42,7 +42,7 @@ void processInput(GLFWwindow *window);
 // extra function
 vector<Vertex_c> getModelSurface(VolumeData &df_data);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
-vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 background_color);
+vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color);
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture);
 
@@ -183,9 +183,9 @@ int main()
 
     UI.init();
 
-    unsigned int texture;
-    vector<vector<glm::vec3>> image = getTexture("../../picture/chest.png", texture);
-    
+    unsigned int texture = 0;
+    char image_path[256] = "../../picture/chest.png";
+    vector<vector<glm::vec3>> image = getTexture(image_path, texture);
     tex_shader.use();
     tex_shader.setInt("image", 0);
     
@@ -197,14 +197,15 @@ int main()
 
     int distance_range = 0;
     
-    bool is_draw_input_BB = true, is_draw_input_voxels = true;
-    bool is_draw_SOM = true, is_SOM_filled = false;
+    bool is_draw_input_BB = false, is_draw_input_voxels = true;
+    bool is_draw_SOM = true, is_SOM_filled = true;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
     int lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
     bool is_draw_color_model = false;
-    const char *elems_names[] = {"position", "texture"};
+    const char *type_names[] = {"position", "texture"};
+    const char *filter_names[] = {"Linear", "Nearest"};
 
     int layer = 1;
 
@@ -274,6 +275,11 @@ int main()
 
         // SOM
         ImGui::Begin("SOM");
+        if(ImGui::InputText("Image Path", image_path, sizeof(image_path), ImGuiInputTextFlags_EnterReturnsTrue)) 
+            image = getTexture(image_path, texture);
+        if(ImGui::Button("Load image"))
+            image = getTexture(image_path, texture);
+        // ImGui::Image((ImTextureID)(intptr_t)texture, ImVec2(256, 256)); // 可以在imgui顯示圖片
         if (ImGui::RadioButton("PLANE", &lattice_type, SQUARE)) { 
             som_data.setType(SQUARE);
             is_SOM_reset = true;
@@ -290,7 +296,7 @@ int main()
             som_data.setType(CUBE);
             is_SOM_reset = true;
         }
-        if(ImGui::SliderInt("Training type", &SOM.training_type, 0, 1, elems_names[SOM.training_type])) {
+        if(ImGui::SliderInt("Training type", &SOM.training_type, 0, 1, type_names[SOM.training_type])) {
             SOM.initiateParameters(som_data);
             is_SOM_start = false;
         }
@@ -305,6 +311,8 @@ int main()
         ImGui::Text("learning rate: %f", SOM.learning_rate_now);
         ImGui::Checkbox("SOM mesh", &is_draw_SOM); 
         ImGui::Checkbox("Fill", &is_SOM_filled); 
+        ImGui::NewLine();
+        ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
         if(ImGui::Button("Two step mapping")) {
             twoStepMapping(layers_voxels[0], som_data, image);
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
@@ -369,6 +377,7 @@ int main()
         color_shader.setMat4("projection", projection);
         color_shader.setVec3("lightPos", lightPos);
         color_shader.setVec3("viewPos", camera.Position);
+        color_shader.setFloat("opacity", 1.0f);
 
         // 畫模型表面 (距離值為0)
         if(is_draw_model_surface) {
@@ -411,7 +420,6 @@ int main()
             glDepthMask(GL_FALSE); 
             glDrawArrays(GL_TRIANGLES, 0, cube.size);
             glDepthMask(GL_TRUE); 
-            color_shader.setFloat("opacity", 1.0f);
         }
 
         // ---------- active shader for texture ----------
@@ -507,6 +515,8 @@ int main()
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (ImGui::GetIO().WantCaptureKeyboard) // 避免在imgui視窗打字觸發鍵盤事件
+        return;
     if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
         moveObject = (moveObject + 1) % 3;
     }
@@ -516,6 +526,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow *window)
 {
+    if (ImGui::GetIO().WantCaptureKeyboard) // 避免在imgui視窗打字觸發鍵盤事件
+        return;
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -740,7 +752,8 @@ vector<Vertex_c> getLatticesVertices(SomData som_data) {
 }
 
 vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture) {
-    glGenTextures(1, &texture);
+    if(texture == 0) // 第一次需要初始化
+        glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture); 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -748,12 +761,15 @@ vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load("../../picture/chest.png", &width, &height, &nrChannels, 3);
+    unsigned char *data = stbi_load(filename, &width, &height, &nrChannels, 3);
     if (data) {
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else cout<<"load image failed"<<endl;
+    } else {
+        cout<<"load image failed"<<endl;
+        return {};
+    }
 
     vector<vector<glm::vec3>> image(height, vector<glm::vec3>(width));
 
@@ -770,12 +786,12 @@ vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture
         }
     }
     stbi_image_free(data);
-
+    cout<<"Image: "<<width<<" x "<<height<<endl<<endl;;
     return image;
 }
 
 // 將mapping後的顏色值存成頂點顏色，不再mapping範圍的另外給值
-vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 background_color) {
+vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color) {
     vector<Vertex_c> vertices;
     auto start = steady_clock::now();
 
@@ -804,7 +820,7 @@ vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df
             vertices[v].position.y += offset.y;
             vertices[v].position.z += offset.z;
             if(color == -1) { // 不在擷取範圍就填上自定義顏色
-                vertices[v].color = {background_color.r, background_color.g, background_color.b};
+                vertices[v].color = {uncarved_color.r, uncarved_color.g, uncarved_color.b};
             } else {
                 vertices[v].color = {f_color, f_color, f_color};
             }
