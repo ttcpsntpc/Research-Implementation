@@ -40,11 +40,13 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 void processInput(GLFWwindow *window);
 
 // extra function
-vector<Vertex_c> getModelSurface(VolumeData &df_data);
+vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
 vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color);
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture);
+void emgravedCarving(LayerVoxels &layer_voxels, VolumeData &df_data);
+void embossedCarving(LayerVoxels &layer_voxels, VolumeData &df_data);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -78,11 +80,13 @@ glm::mat4 cropMatrix = transMat * scaleMat;
 vector<glm::vec3> input_vector;
 vector<Vertex_c> lattice_vertices;
 vector<Vertex_c> color_model_vertices;
+vector<Vertex_c> carved_vertices;
 
 DistanceField3D DF;
 UIManager UI;
 SOM_c SOM;
 vector<LayerVoxels> layers_voxels;
+double carving_threshold = 0.7;
 
 void updateCropMatrix() {
     scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
@@ -165,9 +169,9 @@ int main()
     object_df_voxel.CreateObject(vertices[5], {});
 
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
-
+    VolumeData carved_df_data = df_data;
     // 取得體素表面頂點
-    vector<Vertex_c> voxel_vertex = getModelSurface(df_data);
+    vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0);
     Object_c object_model;
     object_model.CreateObject(voxel_vertex, {});
 
@@ -175,6 +179,8 @@ int main()
     object_lattice.CreateObject(lattice_vertices, {}); // 初始化一個空的
     Object_c object_color_model;
     object_color_model.CreateObject(color_model_vertices, {}); 
+    Object_c object_carved_voxel;
+    object_carved_voxel.CreateObject(carved_vertices, {});
     
     
     
@@ -207,7 +213,7 @@ int main()
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
 
-    int layer = 1;
+    int total_layer = 2;
 
     // render loop
     // -----------
@@ -235,14 +241,14 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
-        ImGui::InputInt("model layer (0 ~ x)", &layer);
+        ImGui::InputInt("model layer (0 ~ x)", &total_layer);
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
         if(ImGui::Button("Get input voxel")) {
             // 取得training voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-            layers_voxels = getLayerVoxel(df_data, invCropMatrix, layer);
+            layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
             input_vector = layers_voxels[0].pos;
             object_input_voxel.UpdateInstances(input_vector);
             // 重製亂數範圍
@@ -317,6 +323,10 @@ int main()
             twoStepMapping(layers_voxels[0], som_data, image);
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
             object_color_model.RenewObject(color_model_vertices);
+            
+            emgravedCarving(layers_voxels[0], carved_df_data);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_voxel.RenewObject(carved_vertices);
         }
         ImGui::Checkbox("Color model", &is_draw_color_model); 
         ImGui::End();
@@ -379,6 +389,13 @@ int main()
         color_shader.setVec3("viewPos", camera.Position);
         color_shader.setFloat("opacity", 1.0f);
 
+        glBindVertexArray(object_carved_voxel.VAO_);
+        model = glm::mat4(1.0f);
+        model = glm::scale(model, ratio);
+        color_shader.setMat4("model", model);
+        color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+        glDrawArrays(GL_TRIANGLES, 0, object_carved_voxel.size);
+        
         // 畫模型表面 (距離值為0)
         if(is_draw_model_surface) {
             glBindVertexArray(object_model.VAO_);
@@ -637,7 +654,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 // 找模型表面體素，取得繪製體素的表面
 // 或許可增進功能?
-vector<Vertex_c> getModelSurface(VolumeData &df_data) {
+vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value) {
     vector<Vertex_c> vertex;
     auto start = steady_clock::now();
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
@@ -656,23 +673,23 @@ vector<Vertex_c> getModelSurface(VolumeData &df_data) {
     for(int i = 0; i < df_data.resolution[0]; i++) {
         for(int j = 0; j < df_data.resolution[1]; j++) {
             for(int k = 0; k < df_data.resolution[2]; k++) {
-                if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣
-                    if((i == 0) || (df_data(i - 1, j, k)) != 0) { // -x
+                if(df_data(i, j, k) == distance_value) { // 遇到model檢查鄰居是否是空氣
+                    if((i == 0) || (df_data(i - 1, j, k)) != distance_value) { // -x
                         insertAndOffsetFace(cube_face_vertices[0], {i, j, k});
                     }
-                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != 0) { // +x
+                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != distance_value) { // +x
                         insertAndOffsetFace(cube_face_vertices[1], {i, j, k});
                     }
-                    if((j == 0) || (df_data(i, j - 1, k)) != 0) { // -y
+                    if((j == 0) || (df_data(i, j - 1, k)) != distance_value) { // -y
                         insertAndOffsetFace(cube_face_vertices[2], {i, j, k});
                     }
-                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != 0) { // +y
+                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != distance_value) { // +y
                         insertAndOffsetFace(cube_face_vertices[3], {i, j, k});
                     }
-                    if((k == 0) || (df_data(i, j, k - 1)) != 0) { // -z
+                    if((k == 0) || (df_data(i, j, k - 1)) != distance_value) { // -z
                         insertAndOffsetFace(cube_face_vertices[4], {i, j, k});
                     }
-                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != 0) { // +z
+                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != distance_value) { // +z
                         insertAndOffsetFace(cube_face_vertices[5], {i, j, k});
                     }
                 }
@@ -688,7 +705,7 @@ vector<Vertex_c> getModelSurface(VolumeData &df_data) {
 
 // 找在範圍內的模型每層距離值的體素，其中距離值為0即代表SOM訓練input
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer) {
-    vector<LayerVoxels> layers_voxels(layer);
+    vector<LayerVoxels> layers_voxels(layer - 1); // 去掉底層
     auto start = steady_clock::now();
     
     for(int i = 0; i < df_data.resolution[0]; i++) {
@@ -700,7 +717,7 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
                 
                 // 直接檢查是否在LCS的 0~1 內
                 if (local_pos.x >= 0.0f && local_pos.x <= 1.0f && local_pos.y >= 0.0f && local_pos.y <= 1.0f && local_pos.z >= 0.0f && local_pos.z <= 1.0f) {
-                    for(int l = 0; l < layer; l++) {
+                    for(int l = 0; l < layer - 1; l++) {
                         if(df_data(i, j, k) == l)
                             layers_voxels[l].pos.push_back({i, j, k});
                     }
@@ -708,7 +725,7 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
             }
         }
     }
-    for(int i = 0; i < layer; i++)
+    for(int i = 0; i < layer - 1; i++)
         cout<<"layer"<<" "<<i<<": "<<layers_voxels[i].pos.size()<<endl;
         
     auto end = steady_clock::now();
@@ -859,4 +876,34 @@ vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df
     cout<<"計算顏色模型表面時間: "<<diff.count()<<" s\n"<<endl;
 
     return vertices;
+}
+
+// 將df_data的某一層做陰刻(圖案挖掉)
+void emgravedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
+    int size = layer_voxels.pos.size();
+    for(int l = 0; l < size; l++) {
+        // 取得index
+        int i = layer_voxels.pos[l].x;
+        int j = layer_voxels.pos[l].y;
+        int k = layer_voxels.pos[l].z;
+        // 轉成灰階顏色
+        double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
+        if(gray_color < carving_threshold)
+            df_data(i, j, k) = 1;
+    }
+}
+
+// 將df_data的某一層做陽刻(圖案以外挖掉)
+void embossedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
+    int size = layer_voxels.pos.size();
+    for(int l = 0; l < size; l++) {
+        // 取得index
+        int i = layer_voxels.pos[l].x;
+        int j = layer_voxels.pos[l].y;
+        int k = layer_voxels.pos[l].z;
+        // 轉成灰階顏色
+        double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
+        if(gray_color > carving_threshold)
+            df_data(i, j, k) = 1;
+    }
 }
