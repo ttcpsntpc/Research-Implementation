@@ -214,8 +214,6 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                         num++;
                     }
                 }
-                if(num < 3)
-                    cout<<num;
                 color /= num;
                 layer_voxels.color[i] = color;
             }

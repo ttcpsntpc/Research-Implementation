@@ -409,19 +409,6 @@ int main()
             glDrawArraysInstanced(GL_TRIANGLES, 0, object_input_voxel.size, object_input_voxel.instanceCount); 
         }
 
-        // 畫選取方塊 ( input BB )
-        if(is_draw_input_BB) {
-            glBindVertexArray(cube.VAO_);
-            model = glm::scale(glm::mat4(1.0f), ratio);
-            model = model * cropMatrix;
-            color_shader.setMat4("model", model);
-            color_shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
-            color_shader.setFloat("opacity", 0.6f);
-            glDepthMask(GL_FALSE); 
-            glDrawArrays(GL_TRIANGLES, 0, cube.size);
-            glDepthMask(GL_TRUE); 
-        }
-
         // ---------- active shader for texture ----------
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -493,6 +480,20 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, cube.size);
             glDisable(GL_CULL_FACE);
             glDepthMask(GL_TRUE);
+        }
+
+        // 畫選取方塊 ( input BB )
+        if(is_draw_input_BB) {
+            color_shader.use();
+            glBindVertexArray(cube.VAO_);
+            model = glm::scale(glm::mat4(1.0f), ratio);
+            model = model * cropMatrix;
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.9, 0.0));
+            color_shader.setFloat("opacity", 0.6f);
+            glDepthMask(GL_FALSE); 
+            glDrawArrays(GL_TRIANGLES, 0, cube.size);
+            glDepthMask(GL_TRUE); 
         }
         
         // ImGui render
