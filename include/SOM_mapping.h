@@ -28,7 +28,7 @@ glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data);
 bool inTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
 glm::vec3 outerProjp(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
 glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 p, SomData &som_data);
-void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data); // 算出LayerVoxels的color
+void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<glm::vec3>> &image); // 算出LayerVoxels的color
 glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data);
 
 extern glm::ivec3 offset[5]; // for BMU相鄰的三角形

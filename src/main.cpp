@@ -41,8 +41,10 @@ void processInput(GLFWwindow *window);
 
 // extra function
 vector<Vertex_c> getModelSurface(VolumeData &df_data);
-vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
+vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 background_color);
+vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
+vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -75,6 +77,7 @@ glm::mat4 cropMatrix = transMat * scaleMat;
 
 vector<glm::vec3> input_vector;
 vector<Vertex_c> lattice_vertices;
+vector<Vertex_c> color_model_vertices;
 
 DistanceField3D DF;
 UIManager UI;
@@ -170,6 +173,10 @@ int main()
 
     Object_c object_lattice;
     object_lattice.CreateObject(lattice_vertices, {}); // 初始化一個空的
+    Object_c object_color_model;
+    object_color_model.CreateObject(color_model_vertices, {}); 
+    
+    
     
     SomData som_data(32, 32);
     som_data.setType(SQUARE);
@@ -177,18 +184,8 @@ int main()
     UI.init();
 
     unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load("../../picture/chest.png", &width, &height, &nrChannels, 0);
-    if (data) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    } else cout<<"load image failed"<<endl;
+    vector<vector<glm::vec3>> image = getTexture("../../picture/chest.png", texture);
+    
     tex_shader.use();
     tex_shader.setInt("image", 0);
     
@@ -205,8 +202,8 @@ int main()
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
 
     int lattice_type;
-    LatticesType TEMP = som_data.lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
+    bool is_draw_color_model = false;
     const char *elems_names[] = {"position", "texture"};
 
     int layer = 1;
@@ -241,7 +238,7 @@ int main()
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
-        if(ImGui::Button("get input voxel")) {
+        if(ImGui::Button("Get input voxel")) {
             // 取得training voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
             layers_voxels = getLayerVoxel(df_data, invCropMatrix, layer);
@@ -257,9 +254,9 @@ int main()
         ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
         ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
 
-        
+        // 模型不同距離值形成的集和
         ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
-        if(ImGui::Button("update voxels")) {
+        if(ImGui::Button("Update voxels")) {
             vector<glm::vec3> cube_pos;
             for(int i = 0; i < df_data.resolution[0]; i++)
                 for(int j = 0; j < df_data.resolution[1]; j++)
@@ -269,6 +266,7 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
+        ImGui::NewLine();
         ImGui::Checkbox("model surface faces", &is_draw_model_surface); 
         ImGui::Checkbox("model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
@@ -307,6 +305,12 @@ int main()
         ImGui::Text("learning rate: %f", SOM.learning_rate_now);
         ImGui::Checkbox("SOM mesh", &is_draw_SOM); 
         ImGui::Checkbox("Fill", &is_SOM_filled); 
+        if(ImGui::Button("Two step mapping")) {
+            twoStepMapping(layers_voxels[0], som_data, image);
+            color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
+            object_color_model.RenewObject(color_model_vertices);
+        }
+        ImGui::Checkbox("Color model", &is_draw_color_model); 
         ImGui::End();
 
         // ============================== Control operation ==============================
@@ -366,7 +370,7 @@ int main()
         color_shader.setVec3("lightPos", lightPos);
         color_shader.setVec3("viewPos", camera.Position);
 
-        // 畫模型表面
+        // 畫模型表面 (距離值為0)
         if(is_draw_model_surface) {
             glBindVertexArray(object_model.VAO_);
             model = glm::mat4(1.0f);
@@ -455,6 +459,14 @@ int main()
         model = glm::scale(model, glm::vec3(100, 100, 100));
         light_shader.setMat4("model", model);
         glDrawArrays(GL_LINES, 0, axis.size);
+
+        if(is_draw_color_model) {
+            glBindVertexArray(object_color_model.VAO_);
+            model = glm::mat4(1.0f);
+            model = glm::scale(model, ratio);
+            light_shader.setMat4("model", model);
+            glDrawArrays(GL_TRIANGLES, 0, object_color_model.size);
+        }
         
         // 畫 model BB
         if(is_draw_bounding_box) {
@@ -723,6 +735,111 @@ vector<Vertex_c> getLatticesVertices(SomData som_data) {
                 vertices.push_back({{v2.x, v2.y, v2.z}, {}, {t2.x, t2.y, t2.z}, {n1.x, n1.y, n1.z}});
                 vertices.push_back({{v3.x, v3.y, v3.z}, {}, {t3.x, t3.y, t3.z}, {n1.x, n1.y, n1.z}});
             }
+
+    return vertices;
+}
+
+vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture) {
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char *data = stbi_load("../../picture/chest.png", &width, &height, &nrChannels, 3);
+    if (data) {
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else cout<<"load image failed"<<endl;
+
+    vector<vector<glm::vec3>> image(height, vector<glm::vec3>(width));
+
+    for (int j = 0; j < height; ++j) {
+        for (int i = 0; i < width; ++i) {
+            // 計算該像素在一維陣列中的起始位置
+            int index = (j * width + i) * 3;
+
+            int r = data[index + 0];
+            int g = data[index + 1];
+            int b = data[index + 2];
+
+            image[j][i] = glm::vec3(r, g, b) / 255.0f;
+        }
+    }
+    stbi_image_free(data);
+
+    return image;
+}
+
+// 將mapping後的顏色值存成頂點顏色，不再mapping範圍的另外給值
+vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 background_color) {
+    vector<Vertex_c> vertices;
+    auto start = steady_clock::now();
+
+    int size = layer_voxels.pos.size();
+    VolumeData color_data = df_data; // 複製一份來存顏色
+    color_data.voxel_data.assign(color_data.voxel_data.size(), -1); // 顏色先清-1
+    for(int l = 0; l < size; l++) {
+        // 取得index
+        int i = layer_voxels.pos[l].x;
+        int j = layer_voxels.pos[l].y;
+        int k = layer_voxels.pos[l].z;
+        // 轉成灰階顏色
+        double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
+        // 存進color data
+        color_data(i, j, k) = gray_color;
+    }
+
+    // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移並補上對應顏色
+    auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset, double color) {
+        size_t old_size = vertices.size();
+        vertices.insert(vertices.end(), face_vertices.begin(), face_vertices.end());
+        size_t new_size = vertices.size();
+        float f_color = static_cast<float>(color);
+        for(size_t v = old_size; v < new_size; v++) {
+            vertices[v].position.x += offset.x;
+            vertices[v].position.y += offset.y;
+            vertices[v].position.z += offset.z;
+            if(color == -1) { // 不在擷取範圍就填上自定義顏色
+                vertices[v].color = {background_color.r, background_color.g, background_color.b};
+            } else {
+                vertices[v].color = {f_color, f_color, f_color};
+            }
+        }
+    };
+
+    for(int i = 0; i < df_data.resolution[0]; i++) {
+        for(int j = 0; j < df_data.resolution[1]; j++) {
+            for(int k = 0; k < df_data.resolution[2]; k++) {
+                if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣
+                    if((i == 0) || (df_data(i - 1, j, k)) != 0) { // -x
+                        insertAndOffsetFace(cube_face_vertices[0], {i, j, k}, color_data(i, j, k));
+                    }
+                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != 0) { // +x
+                        insertAndOffsetFace(cube_face_vertices[1], {i, j, k}, color_data(i, j, k));
+                    }
+                    if((j == 0) || (df_data(i, j - 1, k)) != 0) { // -y
+                        insertAndOffsetFace(cube_face_vertices[2], {i, j, k}, color_data(i, j, k));
+                    }
+                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != 0) { // +y
+                        insertAndOffsetFace(cube_face_vertices[3], {i, j, k}, color_data(i, j, k));
+                    }
+                    if((k == 0) || (df_data(i, j, k - 1)) != 0) { // -z
+                        insertAndOffsetFace(cube_face_vertices[4], {i, j, k}, color_data(i, j, k));
+                    }
+                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != 0) { // +z
+                        insertAndOffsetFace(cube_face_vertices[5], {i, j, k}, color_data(i, j, k));
+                    }
+                }
+            }
+        }
+    }
+    auto end = steady_clock::now();
+    auto diff = duration<double>(end - start);
+    cout<<"計算顏色模型表面時間: "<<diff.count()<<" s\n"<<endl;
 
     return vertices;
 }

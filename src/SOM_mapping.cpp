@@ -3,6 +3,8 @@
 
 using namespace chrono;
 
+TexFilter tex_filter = LINEAR;
+SizeFilter size_filter = MAGNIFICATON;
 glm::ivec3 offset[5] = {{1, 0, 0}, {0, 1, 0}, {-1, 0, 0}, {0, -1, 0}, {1, 0, 0}}; // for BMU相鄰的三角形
 
 glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data) {
@@ -156,15 +158,66 @@ glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
 }
 
 // 對每一層的體素都做兩階段映射算出顏色值
-void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data) {
+void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<glm::vec3>> &image) {
     auto start = steady_clock::now();
     int size = layer_voxels.pos.size();
     layer_voxels.color.resize(size);
-
+    int height = image.size();
+    int width = image[0].size();
     for(int i = 0; i < size; i++) {
-        glm::vec3 voxel = layer_voxels.pos[i];
-        voxel += glm::vec3{0.5f, 0.5f, 0.5f};
-        glm::vec2 texcoord = SOMMapping(voxel, som_data);
+        // SOM mapping
+        glm::vec3 voxel_index = layer_voxels.pos[i];
+        glm::vec2 texcoord = SOMMapping(voxel_index + glm::vec3{0.5f, 0.5f, 0.5f}, som_data); // 體素中心點映射後的texcoord
+        // texture mapping
+        if(tex_filter == NEAREST) { 
+            glm::ivec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1) + 0.5f); // 四捨五入 + 轉型
+            // 取得0~255值後四捨五入，再轉回0~1
+            layer_voxels.color[i] = image[texel_index.x][texel_index.y];
+        } 
+        else if(tex_filter == LINEAR) { 
+            if(width * height < size)
+                size_filter = MAGNIFICATON;
+            else 
+                size_filter = MINIFICATION;
+            glm::vec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1));
+            if(size_filter == MAGNIFICATON) {
+                glm::ivec2 texel_IJ = (glm::ivec2)texel_index; // 左下角texel
+                float dx = texel_index.x - texel_IJ.x;
+                float dy = texel_index.y - texel_IJ.y;
+                int offset[2] = {1, 1}; // x和y方向index位移
+                if(texel_IJ.x == width - 1)
+                    offset[0] = 0;
+                if(texel_IJ.y == height - 1)
+                    offset[1] = 0;
+                glm::vec3 c00 = image[texel_IJ.x][texel_IJ.y];
+                glm::vec3 c10 = image[texel_IJ.x + offset[0]][texel_IJ.y];
+                glm::vec3 c11 = image[texel_IJ.x + offset[0]][texel_IJ.y + offset[1]];
+                glm::vec3 c01 = image[texel_IJ.x][texel_IJ.y + offset[1]];
+                layer_voxels.color[i] = (1 - dx) * (1 - dy) * c00 + dx * (1 - dy) * c10 + (1 - dx) * dy * c01 + dx * dy * c11;
+            }
+            else if(size_filter == MINIFICATION) {
+                // texcoord
+                glm::vec2 texcoord_000 = SOMMapping(voxel_index, som_data); // 體素左下後點映射後的texcoord
+                glm::vec2 texcoord_111 = SOMMapping(voxel_index + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
+                // texture map index
+                glm::vec2 texel_index_000 = (texcoord_000 * glm::vec2(width - 1, height - 1));
+                glm::vec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1));
+                // start and end point of texture map index // 四捨五入 + 轉型
+                glm::ivec2 t0 = texel_index_000;
+                glm::ivec2 t1 = texel_index_111 + 0.5f;
+                // box filter
+                int num = 0;
+                glm::vec3 color = {0.0f, 0.0f, 0.0f};
+                for(int j = t0.y; j < t1.y; j++) {
+                    for(int i = t0.x; i < t1.x; i++) {
+                        color += image[j][i];
+                        num++;
+                    }
+                }
+                color /= num;
+                layer_voxels.color[i] = color;
+            }
+        }
     }
 
     
