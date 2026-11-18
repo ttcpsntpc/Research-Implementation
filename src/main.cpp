@@ -214,7 +214,7 @@ int main()
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
     int lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
-    bool is_draw_color_model = false, is_draw_carved_model = false, is_draw_base_layer;
+    bool is_draw_color_model = false, is_draw_carved_model = true, is_draw_base_layer = true;
 
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
