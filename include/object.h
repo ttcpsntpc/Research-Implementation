@@ -93,7 +93,10 @@ public:
         size_t newSizeBytes = vertices.size() * sizeof(Vertex_c);
         if (newSizeBytes > vboCapacityBytes_) {
             vboCapacityBytes_ = std::max(newSizeBytes, vboCapacityBytes_ + vboCapacityBytes_ / 2);
-            glBufferData(GL_ARRAY_BUFFER, vboCapacityBytes_, vertices.data(), GL_DYNAMIC_DRAW);
+            // 先配置空間，指標傳入 nullptr，不讀取資料
+            glBufferData(GL_ARRAY_BUFFER, vboCapacityBytes_, nullptr, GL_DYNAMIC_DRAW);
+            // 再將實際大小的資料寫入
+            glBufferSubData(GL_ARRAY_BUFFER, 0, newSizeBytes, vertices.data());
         } else {
             glBufferSubData(GL_ARRAY_BUFFER, 0, newSizeBytes, vertices.data());
         }

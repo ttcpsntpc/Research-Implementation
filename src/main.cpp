@@ -45,8 +45,8 @@ vector<Vertex_c> getLatticesVertices(SomData som_data);
 vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color);
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
 vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture);
-void emgravedCarving(LayerVoxels &layer_voxels, VolumeData &df_data);
-void embossedCarving(LayerVoxels &layer_voxels, VolumeData &df_data);
+void engravedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
+void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -169,7 +169,7 @@ int main()
     object_df_voxel.CreateObject(vertices[5], {});
 
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
-    VolumeData carved_df_data = df_data;
+    VolumeData carved_df_data;
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0);
     Object_c object_model;
@@ -209,7 +209,7 @@ int main()
 
     int lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
-    bool is_draw_color_model = false;
+    bool is_draw_color_model = false, is_draw_carved_model = false;
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
 
@@ -241,7 +241,8 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
-        ImGui::InputInt("model layer (0 ~ x)", &total_layer);
+        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer) && total_layer < 2)
+            total_layer = 2;
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
@@ -320,15 +321,50 @@ int main()
         ImGui::NewLine();
         ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
         if(ImGui::Button("Two step mapping")) {
-            twoStepMapping(layers_voxels[0], som_data, image);
+            for(int l = 0; l < total_layer - 1; l++) {
+                twoStepMapping(layers_voxels[l], som_data, image);
+            }
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
             object_color_model.RenewObject(color_model_vertices);
-            
-            emgravedCarving(layers_voxels[0], carved_df_data);
+
+            carved_df_data = df_data;
+            // 把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
+            for(int k = 0; k < df_data.resolution[2]; k++) {
+                for(int j = 0; j < df_data.resolution[1]; j++) {
+                    for(int i = 0; i < df_data.resolution[0]; i++) {
+                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < total_layer - 1)
+                            carved_df_data(i, j, k) = 0;
+                    }
+                }
+            }
+        }
+        if(ImGui::Button("Engraving")) {
+            for(int i = 0; i < total_layer - 1; i++)
+                engravedCarving(layers_voxels[i], carved_df_data);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_voxel.RenewObject(carved_vertices);
+        } ImGui::SameLine();
+        if(ImGui::Button("Embossing")) {
+            for(int i = 0; i < total_layer - 1; i++)
+                embossedCarving(layers_voxels[i], carved_df_data);
             carved_vertices = getModelVertices(carved_df_data, 0);
             object_carved_voxel.RenewObject(carved_vertices);
         }
+        if(ImGui::Button("Reset carving effect")) {
+            carved_df_data = df_data;
+            // 把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
+            for(int k = 0; k < df_data.resolution[2]; k++) {
+                for(int j = 0; j < df_data.resolution[1]; j++) {
+                    for(int i = 0; i < df_data.resolution[0]; i++) {
+                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < total_layer - 1)
+                            carved_df_data(i, j, k) = 0;
+                    }
+                }
+            }
+            object_carved_voxel.RenewObject({});
+        }
         ImGui::Checkbox("Color model", &is_draw_color_model); 
+        ImGui::Checkbox("carved model", &is_draw_carved_model); 
         ImGui::End();
 
         // ============================== Control operation ==============================
@@ -389,12 +425,15 @@ int main()
         color_shader.setVec3("viewPos", camera.Position);
         color_shader.setFloat("opacity", 1.0f);
 
-        glBindVertexArray(object_carved_voxel.VAO_);
-        model = glm::mat4(1.0f);
-        model = glm::scale(model, ratio);
-        color_shader.setMat4("model", model);
-        color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
-        glDrawArrays(GL_TRIANGLES, 0, object_carved_voxel.size);
+        // 畫雕刻後的模型
+        if(is_draw_carved_model) {
+            glBindVertexArray(object_carved_voxel.VAO_);
+            model = glm::mat4(1.0f);
+            model = glm::scale(model, ratio);
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
+            glDrawArrays(GL_TRIANGLES, 0, object_carved_voxel.size);
+        }
         
         // 畫模型表面 (距離值為0)
         if(is_draw_model_surface) {
@@ -808,7 +847,7 @@ vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture
     return image;
 }
 
-// 將mapping後的顏色值存成頂點顏色，不再mapping範圍的另外給值
+// 將mapping後的顏色值存成頂點顏色，不再mapping範圍的另外給值，只存模型表面 (距離值0)
 vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color) {
     vector<Vertex_c> vertices;
     auto start = steady_clock::now();
@@ -879,7 +918,7 @@ vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df
 }
 
 // 將df_data的某一層做陰刻(圖案挖掉)
-void emgravedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
+void engravedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data) {
     int size = layer_voxels.pos.size();
     for(int l = 0; l < size; l++) {
         // 取得index
@@ -889,12 +928,12 @@ void emgravedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
         // 轉成灰階顏色
         double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
         if(gray_color < carving_threshold)
-            df_data(i, j, k) = 1;
+            carved_df_data(i, j, k) = 1;
     }
 }
 
 // 將df_data的某一層做陽刻(圖案以外挖掉)
-void embossedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
+void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data) {
     int size = layer_voxels.pos.size();
     for(int l = 0; l < size; l++) {
         // 取得index
@@ -904,6 +943,6 @@ void embossedCarving(LayerVoxels &layer_voxels, VolumeData &df_data) {
         // 轉成灰階顏色
         double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
         if(gray_color > carving_threshold)
-            df_data(i, j, k) = 1;
+            carved_df_data(i, j, k) = 1;
     }
 }
