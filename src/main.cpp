@@ -47,6 +47,8 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
 vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture);
 void engravedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
 void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
+void dilation(VolumeData &carved_df_data, int threshold);
+void erosion(VolumeData &carved_df_data, int threshold);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -365,6 +367,28 @@ int main()
         if(ImGui::Button("Embossing")) {
             for(int i = 0; i < total_layer - 1; i++)
                 embossedCarving(layers_voxels[i], carved_df_data);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_layer.RenewObject(carved_vertices);
+        }
+        if(ImGui::Button("Dilation")) {
+            dilation(carved_df_data, 3);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_layer.RenewObject(carved_vertices);
+        } ImGui::SameLine();
+        if(ImGui::Button("Erosion")) {
+            erosion(carved_df_data, 3);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_layer.RenewObject(carved_vertices);
+        }
+        if(ImGui::Button("Opening")) {
+            erosion(carved_df_data, 3);
+            dilation(carved_df_data, 3);
+            carved_vertices = getModelVertices(carved_df_data, 0);
+            object_carved_layer.RenewObject(carved_vertices);
+        } ImGui::SameLine();
+        if(ImGui::Button("Closing")) {
+            dilation(carved_df_data, 3);
+            erosion(carved_df_data, 3);
             carved_vertices = getModelVertices(carved_df_data, 0);
             object_carved_layer.RenewObject(carved_vertices);
         }
@@ -724,6 +748,8 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value) {
     vector<Vertex_c> vertex;
     auto start = steady_clock::now();
+    glm::ivec3 resolution = df_data.resolution;
+
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
     auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset) {
         size_t old_size = vertex.size();
@@ -737,9 +763,9 @@ vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value) {
         }
     };
 
-    for(int i = 0; i < df_data.resolution[0]; i++) {
-        for(int j = 0; j < df_data.resolution[1]; j++) {
-            for(int k = 0; k < df_data.resolution[2]; k++) {
+    for(int k = 0; k < resolution[2]; k++) {
+        for(int j = 0; j < resolution[1]; j++) {
+            for(int i = 0; i < resolution[0]; i++) {
                 if(df_data(i, j, k) == distance_value) { // 遇到model檢查鄰居是否是空氣
                     if((i == 0) || (df_data(i - 1, j, k)) != distance_value) { // -x
                         insertAndOffsetFace(cube_face_vertices[0], {i, j, k});
@@ -774,10 +800,11 @@ vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value) {
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer) {
     vector<LayerVoxels> layers_voxels(layer - 1); // 去掉底層
     auto start = steady_clock::now();
+    glm::ivec3 resolution = df_data.resolution;
     
-    for(int i = 0; i < df_data.resolution[0]; i++) {
-        for(int j = 0; j < df_data.resolution[1]; j++) {
-            for(int k = 0; k < df_data.resolution[2]; k++) {
+    for(int k = 0; k < resolution[2]; k++) {
+        for(int j = 0; j < resolution[1]; j++) {
+            for(int i = 0; i < resolution[0]; i++) {
                 glm::vec4 voxel(i + 0.5f, j + 0.5f, k + 0.5f, 1.0f); // model space
                 glm::vec4 local_space = matrix * voxel; // transform to LCS
                 glm::vec3 local_pos = glm::vec3(local_space) / local_space.w; // get local position
@@ -879,7 +906,8 @@ vector<vector<glm::vec3>> getTexture(const char *filename, unsigned int &texture
 vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color) {
     vector<Vertex_c> vertices;
     auto start = steady_clock::now();
-
+    
+    glm::ivec3 resolution = df_data.resolution;
     int size = layer_voxels.pos.size();
     VolumeData color_data = df_data; // 複製一份來存顏色
     color_data.voxel_data.assign(color_data.voxel_data.size(), -1); // 顏色先清-1
@@ -912,9 +940,9 @@ vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df
         }
     };
 
-    for(int i = 0; i < df_data.resolution[0]; i++) {
-        for(int j = 0; j < df_data.resolution[1]; j++) {
-            for(int k = 0; k < df_data.resolution[2]; k++) {
+    for(int k = 0; k < resolution[2]; k++) {
+        for(int j = 0; j < resolution[1]; j++) {
+            for(int i = 0; i < resolution[0]; i++) {
                 if(df_data(i, j, k) == 0) { // 遇到model檢查鄰居是否是空氣
                     if((i == 0) || (df_data(i - 1, j, k)) != 0) { // -x
                         insertAndOffsetFace(cube_face_vertices[0], {i, j, k}, color_data(i, j, k));
@@ -972,5 +1000,55 @@ void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data) {
         double gray_color = 0.299 * layer_voxels.color[l].r + 0.587 * layer_voxels.color[l].g + 0.114 * layer_voxels.color[l].b;
         if(gray_color > carving_threshold)
             carved_df_data(i, j, k) = 1;
+    }
+}
+
+// 擴張白色範圍(空氣)(距離值!=0)
+void dilation(VolumeData &carved_df_data, int threshold) {
+    glm::ivec3 resolution = carved_df_data.resolution;
+    glm::ivec3 offset[6] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
+
+    VolumeData temp_data = carved_df_data;
+    for(int k = 1; k < resolution[2] - 1; k++) { // 偷懶跳過邊緣，但體素化時正常已經有padding過了應該沒差
+        for(int j = 1; j < resolution[1] - 1; j++) {
+            for(int i = 1; i < resolution[0] - 1; i++) {
+                // 六個鄰居有threshld個以上白色就設為白色(空氣)(距離值!=0)
+                if(temp_data(i, j, k) == 0) { // 利用只有模型需要判斷來加速，之後距離值改變可能有危險!
+                    int count = 0;
+                    for(int d = 0; d < 6; d++) {
+                        glm::ivec3 index = glm::ivec3(i, j, k) + offset[d]; 
+                        if(temp_data(index.x, index.y, index.z) != 0)
+                            count++;
+                    }
+                    if(count >= threshold)
+                        carved_df_data(i, j, k) = 1;
+                }
+            }
+        }
+    }
+}
+
+// 縮減白色範圍，黑色範圍增加(模型)(距離值=0)
+void erosion(VolumeData &carved_df_data, int threshold) {
+    glm::ivec3 resolution = carved_df_data.resolution;
+    glm::ivec3 offset[6] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
+
+    VolumeData temp_data = carved_df_data;
+    for(int k = 1; k < resolution[2] - 1; k++) { // 偷懶跳過邊緣，但體素化時正常已經有padding過了應該沒差
+        for(int j = 1; j < resolution[1] - 1; j++) {
+            for(int i = 1; i < resolution[0] - 1; i++) {
+                // 六個鄰居有threshld個以上黑色就設為黑色(模型)(距離值=0)
+                if(temp_data(i, j, k) == 1) { // 利用只有模型周圍體素需要判斷來加速，之後距離值改變可能有危險!
+                    int count = 0;
+                    for(int d = 0; d < 6; d++) {
+                        glm::ivec3 index = glm::ivec3(i, j, k) + offset[d]; 
+                        if(temp_data(index.x, index.y, index.z) == 0)
+                            count++;
+                    }
+                    if(count >= threshold)
+                        carved_df_data(i, j, k) = 0;
+                }
+            }
+        }
     }
 }
