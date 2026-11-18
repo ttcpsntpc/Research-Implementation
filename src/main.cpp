@@ -81,6 +81,7 @@ vector<glm::vec3> input_vector;
 vector<Vertex_c> lattice_vertices;
 vector<Vertex_c> color_model_vertices;
 vector<Vertex_c> carved_vertices;
+vector<Vertex_c> base_vertices; // for 鏤空的底層
 
 DistanceField3D DF;
 UIManager UI;
@@ -179,8 +180,10 @@ int main()
     object_lattice.CreateObject(lattice_vertices, {}); // 初始化一個空的
     Object_c object_color_model;
     object_color_model.CreateObject(color_model_vertices, {}); 
-    Object_c object_carved_voxel;
-    object_carved_voxel.CreateObject(carved_vertices, {});
+    Object_c object_carved_layer;
+    object_carved_layer.CreateObject(carved_vertices, {});
+    Object_c object_base_layer;
+    object_base_layer.CreateObject(base_vertices, {});
     
     
     
@@ -190,7 +193,7 @@ int main()
     UI.init();
 
     unsigned int texture = 0;
-    char image_path[256] = "../../picture/chest.png";
+    char image_path[256] = "../../picture/vase_pattern34.png";
     vector<vector<glm::vec3>> image = getTexture(image_path, texture);
     tex_shader.use();
     tex_shader.setInt("image", 0);
@@ -203,16 +206,16 @@ int main()
 
     int distance_range = 0;
     
+    bool is_layer_changed = false;
     bool is_draw_input_BB = false, is_draw_input_voxels = true;
     bool is_draw_SOM = true, is_SOM_filled = true;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
-
     int lattice_type;
     bool is_SOM_reset = false, is_SOM_start = false;
-    bool is_draw_color_model = false, is_draw_carved_model = false;
+    bool is_draw_color_model = false, is_draw_carved_model = false, is_draw_base_layer;
+
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
-
     int total_layer = 2;
 
     // render loop
@@ -241,12 +244,18 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
-        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer) && total_layer < 2) 
-            total_layer = 2;
-        if(ImGui::Button("Modify layer voxel")) {
-            // 取得layer voxel
-            glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-            layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer)) {
+            if(total_layer < 2)
+                total_layer = 2;
+            else is_layer_changed = true;
+        } 
+        if(is_layer_changed) {
+            if(ImGui::Button("Modify layer voxel")) {
+                // 取得layer voxel
+                glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
+                layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+                is_layer_changed = false;
+            }
         }
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
@@ -280,8 +289,8 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        ImGui::Checkbox("model surface faces", &is_draw_model_surface); 
-        ImGui::Checkbox("model df-voxels", &is_draw_df_voxels);
+        ImGui::Checkbox("model surface faces", &is_draw_model_surface); ImGui::SameLine();
+        ImGui::Checkbox("model df-voxels", &is_draw_df_voxels); ImGui::SameLine();
         ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
         ImGui::End();
 
@@ -321,7 +330,7 @@ int main()
         ImGui::Text("iter: %d", SOM.iter_now);
         ImGui::Text("radius: %f", SOM.radius_now);
         ImGui::Text("learning rate: %f", SOM.learning_rate_now);
-        ImGui::Checkbox("SOM mesh", &is_draw_SOM); 
+        ImGui::Checkbox("SOM mesh", &is_draw_SOM); ImGui::SameLine();
         ImGui::Checkbox("Fill", &is_SOM_filled); 
         ImGui::NewLine();
         ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
@@ -330,11 +339,14 @@ int main()
                 cout<<"Mapping payer: "<<l<<endl;
                 twoStepMapping(layers_voxels[l], som_data, image);
             }
+            // 儲存模型表面顏色頂點
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
             object_color_model.RenewObject(color_model_vertices);
-
+            // 儲存底層頂點
+            base_vertices = getModelVertices(df_data, total_layer - 1);
+            object_base_layer.RenewObject(base_vertices);
+            // 重製carved_df_data，並把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
             carved_df_data = df_data;
-            // 把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
             for(int k = 0; k < df_data.resolution[2]; k++) {
                 for(int j = 0; j < df_data.resolution[1]; j++) {
                     for(int i = 0; i < df_data.resolution[0]; i++) {
@@ -342,19 +354,19 @@ int main()
                             carved_df_data(i, j, k) = 0;
                     }
                 }
-            }
+            }   
         }
         if(ImGui::Button("Engraving")) {
             for(int i = 0; i < total_layer - 1; i++)
                 engravedCarving(layers_voxels[i], carved_df_data);
             carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_voxel.RenewObject(carved_vertices);
+            object_carved_layer.RenewObject(carved_vertices);
         } ImGui::SameLine();
         if(ImGui::Button("Embossing")) {
             for(int i = 0; i < total_layer - 1; i++)
                 embossedCarving(layers_voxels[i], carved_df_data);
             carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_voxel.RenewObject(carved_vertices);
+            object_carved_layer.RenewObject(carved_vertices);
         }
         if(ImGui::Button("Reset carving effect")) {
             carved_df_data = df_data;
@@ -367,10 +379,11 @@ int main()
                     }
                 }
             }
-            object_carved_voxel.RenewObject({});
+            object_carved_layer.RenewObject({});
         }
         ImGui::Checkbox("Color model", &is_draw_color_model); 
-        ImGui::Checkbox("carved model", &is_draw_carved_model); 
+        ImGui::Checkbox("carved model", &is_draw_carved_model); ImGui::SameLine();
+        ImGui::Checkbox("base layer", &is_draw_base_layer); 
         ImGui::End();
 
         // ============================== Control operation ==============================
@@ -433,14 +446,23 @@ int main()
 
         // 畫雕刻後的模型
         if(is_draw_carved_model) {
-            glBindVertexArray(object_carved_voxel.VAO_);
+            glBindVertexArray(object_carved_layer.VAO_);
             model = glm::mat4(1.0f);
             model = glm::scale(model, ratio);
             color_shader.setMat4("model", model);
             color_shader.setVec3("color", glm::vec3(1.0, 0.5, 0.0));
-            glDrawArrays(GL_TRIANGLES, 0, object_carved_voxel.size);
+            glDrawArrays(GL_TRIANGLES, 0, object_carved_layer.size);
         }
         
+        // 畫模型底層
+        if(is_draw_base_layer) {
+            glBindVertexArray(object_base_layer.VAO_);
+            model = glm::mat4(1.0f);
+            model = glm::scale(model, ratio);
+            color_shader.setMat4("model", model);
+            color_shader.setVec3("color", glm::vec3(1.0, 0.2, 0.8));
+            glDrawArrays(GL_TRIANGLES, 0, object_carved_layer.size);
+        }
         // 畫模型表面 (距離值為0)
         if(is_draw_model_surface) {
             glBindVertexArray(object_model.VAO_);

@@ -67,7 +67,7 @@ struct SomData {
 class SOM_c {
 public:
     int resolution[3]; // 用來區分 3D lattices (donut) and texcoord 的訓練
-    int iter_max = 120000;
+    int iter_max = 300000;
     int iter_now;
     
     double learning_rate_init = 0.005;
