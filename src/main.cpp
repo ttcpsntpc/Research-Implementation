@@ -241,15 +241,21 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
-        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer) && total_layer < 2)
+        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer) && total_layer < 2) 
             total_layer = 2;
+        if(ImGui::Button("Modify layer voxel")) {
+            // 取得layer voxel
+            glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
+            layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+        }
         // input擷取框資訊
         ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
         ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
-        if(ImGui::Button("Get input voxel")) {
-            // 取得training voxel
+        if(ImGui::Button("Get BB layer voxel")) {
+            // 取得layer voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
             layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+            // 取得training input
             input_vector = layers_voxels[0].pos;
             object_input_voxel.UpdateInstances(input_vector);
             // 重製亂數範圍
@@ -261,7 +267,7 @@ int main()
         }
         ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
         ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
-
+        ImGui::NewLine();
         // 模型不同距離值形成的集和
         ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
         if(ImGui::Button("Update voxels")) {
@@ -274,7 +280,6 @@ int main()
             cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
             object_df_voxel.UpdateInstances(cube_pos);
         }
-        ImGui::NewLine();
         ImGui::Checkbox("model surface faces", &is_draw_model_surface); 
         ImGui::Checkbox("model df-voxels", &is_draw_df_voxels);
         ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
@@ -322,6 +327,7 @@ int main()
         ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
         if(ImGui::Button("Two step mapping")) {
             for(int l = 0; l < total_layer - 1; l++) {
+                cout<<"Mapping payer: "<<l<<endl;
                 twoStepMapping(layers_voxels[l], som_data, image);
             }
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
