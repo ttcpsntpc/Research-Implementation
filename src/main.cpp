@@ -1017,7 +1017,7 @@ void dilation(VolumeData &carved_df_data, int threshold) {
                     int count = 0;
                     for(int d = 0; d < 6; d++) {
                         glm::ivec3 index = glm::ivec3(i, j, k) + offset[d]; 
-                        if(temp_data(index.x, index.y, index.z) != 0)
+                        if(temp_data(index.x, index.y, index.z) > 0)
                             count++;
                     }
                     if(count >= threshold)
