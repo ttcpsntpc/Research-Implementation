@@ -278,7 +278,6 @@ int main()
             int size = input_vector.size();
             using param_t = std::uniform_int_distribution<int>::param_type; // 用左式取代右式一長串
             dis_int.param(param_t(0, size - 1));
-            
             is_SOM_reset = true;
         }
         ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
@@ -816,7 +815,7 @@ vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value) {
 
 // 找在範圍內的模型每層距離值的體素，其中距離值為0即代表SOM訓練input
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer) {
-    vector<LayerVoxels> layers_voxels(layer - 1); // 去掉底層
+    vector<LayerVoxels> layers_voxels(layer); // 去掉底層
     auto start = steady_clock::now();
     glm::ivec3 resolution = df_data.resolution;
     
@@ -829,7 +828,7 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
                 
                 // 直接檢查是否在LCS的 0~1 內
                 if (local_pos.x >= 0.0f && local_pos.x <= 1.0f && local_pos.y >= 0.0f && local_pos.y <= 1.0f && local_pos.z >= 0.0f && local_pos.z <= 1.0f) {
-                    for(int l = 0; l < layer - 1; l++) {
+                    for(int l = 0; l < layer; l++) {
                         if(df_data(i, j, k) == l)
                             layers_voxels[l].pos.push_back({i, j, k});
                     }
@@ -837,7 +836,7 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
             }
         }
     }
-    for(int i = 0; i < layer - 1; i++)
+    for(int i = 0; i < layer; i++)
         cout<<"layer"<<" "<<i<<": "<<layers_voxels[i].pos.size()<<endl;
         
     auto end = steady_clock::now();
