@@ -1021,8 +1021,8 @@ void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data) {
     }
 }
 
-// 擴張白色範圍(空氣)(距離值!=0)
-void dilation(VolumeData &carved_df_data, int threshold) {
+// 縮減黑色範圍，白色範圍增加(空氣)(距離值!=0) // 這個program的使用跟一般運算定義相反(黑白對象互換)
+void erosion(VolumeData &carved_df_data, int threshold) {
     glm::ivec3 resolution = carved_df_data.resolution;
     glm::ivec3 offset[6] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
 
@@ -1046,8 +1046,8 @@ void dilation(VolumeData &carved_df_data, int threshold) {
     }
 }
 
-// 縮減白色範圍，黑色範圍增加(模型)(距離值=0)
-void erosion(VolumeData &carved_df_data, int threshold) {
+// 擴增黑色範圍(模型)(距離值=0)
+void dilation(VolumeData &carved_df_data, int threshold) {
     glm::ivec3 resolution = carved_df_data.resolution;
     glm::ivec3 offset[6] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
 
