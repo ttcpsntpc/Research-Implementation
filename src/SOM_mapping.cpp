@@ -216,6 +216,9 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                 }
                 color /= num;
                 layer_voxels.color[i] = color;
+                // 另一種想法:
+                // 理想情況，SOM最後完美貼合模型，模型也平均散開成表面沒有體素被包住，張開來變成兩張長寬比相同但不同解析度的平面在映射 
+                // -> (width * ratio) * (height * ratio) = #(voxels) -> ratio = sqrt(#(voxels) / (width * height))
             }
         }
     }

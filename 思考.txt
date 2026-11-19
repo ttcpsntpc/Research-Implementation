@@ -39,4 +39,6 @@ Q: 算表面的函式目前是對整個空間計算，之後要區分陰刻陽�
 # 筆記
 * c++和c差在 mt比srand還要亂跟長 有random device做為一個好的隨機起點 有distribution做公平分配
 
-engrave -> emboss -> reset -> emboss -> wrong
+flow chart: 體素化->距離場計算->SOM訓練->兩階段紋理映射->雕刻->型態學運算和平滑化->產生三角片
+
+

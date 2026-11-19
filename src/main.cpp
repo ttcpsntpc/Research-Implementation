@@ -1,3 +1,5 @@
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -49,6 +51,7 @@ void engravedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
 void embossedCarving(LayerVoxels &layer_voxels, VolumeData &carved_df_data);
 void dilation(VolumeData &carved_df_data, int threshold);
 void erosion(VolumeData &carved_df_data, int threshold);
+void saveOpenGLScreenshot(const string& filename);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -90,6 +93,7 @@ UIManager UI;
 SOM_c SOM;
 vector<LayerVoxels> layers_voxels;
 double carving_threshold = 0.7;
+char screenshot_name[128] = "../../screenshot/test.png";
 
 void updateCropMatrix() {
     scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
@@ -208,7 +212,7 @@ int main()
 
     int distance_range = 0;
     
-    bool is_layer_changed = false;
+    bool is_layer_changed = false, is_screenshot = false;
     bool is_draw_input_BB = false, is_draw_input_voxels = true;
     bool is_draw_SOM = true, is_SOM_filled = true;
     bool is_draw_df_voxels = false, is_draw_model_surface = false, is_draw_bounding_box = false;
@@ -242,6 +246,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // ============================== Imgui ==============================
+        ImGui::StyleColorsLight();
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
         
@@ -279,6 +284,12 @@ int main()
         ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
         ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
         ImGui::NewLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.5f, 1.0f)); 
+        if(ImGui::Button("Screenshot")) 
+            is_screenshot = true;
+        ImGui::PopStyleColor(1);
+        ImGui::SameLine();
+        ImGui::InputText("Screenshot name", screenshot_name, sizeof(screenshot_name));
         // 模型不同距離值形成的集和
         ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
         if(ImGui::Button("Update voxels")) {
@@ -544,6 +555,8 @@ int main()
 
         // ---------- active shader for background ----------
         light_shader.use();
+        light_shader.setVec3("lightPos", lightPos);
+        light_shader.setVec3("viewPos", camera.Position);
         light_shader.setMat4("view", view);
         light_shader.setMat4("projection", projection);
         light_shader.setFloat("opacity", 1.0f);
@@ -604,6 +617,11 @@ int main()
             glDepthMask(GL_TRUE); 
         }
         
+        if(is_screenshot) {
+            saveOpenGLScreenshot(screenshot_name);
+            is_screenshot = false;
+        }
+
         // ImGui render
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1050,5 +1068,38 @@ void erosion(VolumeData &carved_df_data, int threshold) {
                 }
             }
         }
+    }
+}
+void saveOpenGLScreenshot(const string& filename) {
+    // 1. 取得目前 Viewport 尺寸 (x, y, width, height)
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    int width  = viewport[2];
+    int height = viewport[3];
+
+    if (width <= 0 || height <= 0) {
+        cerr << "[Screenshot] Invalid viewport size.\n";
+        return;
+    }
+
+    // 2. 確保讀取像素時列對齊為 1 byte，避免寬度非 4 的倍數時畫面錯位
+    GLint prevAlignment = 4;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &prevAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+    // 3. 讀取目前讀取緩衝區 (預設為 GL_BACK / 目前綁定的 FBO) 的 RGB 像素
+    vector<unsigned char> pixels(static_cast<size_t>(width) * height * 3);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+    // 還原原本的對齊設定
+    glPixelStorei(GL_PACK_ALIGNMENT, prevAlignment);
+
+    // 4. 垂直翻轉影像 (OpenGL 底部為 y=0，PNG 頂部為 y=0)
+    stbi_flip_vertically_on_write(1);
+
+    // 5. 寫出 PNG (stride = width * 3 bytes)
+    int success = stbi_write_png(filename.c_str(), width, height, 3, pixels.data(), width * 3);
+    if (!success) {
+        cerr << "[Screenshot] Failed to write PNG: " << filename << "\n";
     }
 }
