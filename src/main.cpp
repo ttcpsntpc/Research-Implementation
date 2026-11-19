@@ -222,7 +222,7 @@ int main()
 
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
-    int total_layer = 2;
+    int carved_layer = 1;
 
     // render loop
     // -----------
@@ -251,16 +251,16 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
-        if(ImGui::InputInt("model layer (0 ~ x)", &total_layer)) {
-            if(total_layer < 2)
-                total_layer = 2;
+        if(ImGui::InputInt("model layer (0 ~ x)", &carved_layer)) {
+            if(carved_layer < 1)
+                carved_layer = 1;
             else is_layer_changed = true;
         } 
         if(is_layer_changed) {
             if(ImGui::Button("Modify layer voxel")) {
                 // 取得layer voxel
                 glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-                layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+                layers_voxels = getLayerVoxel(df_data, invCropMatrix, carved_layer);
                 is_layer_changed = false;
             }
         }
@@ -270,7 +270,7 @@ int main()
         if(ImGui::Button("Get BB layer voxel")) {
             // 取得layer voxel
             glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-            layers_voxels = getLayerVoxel(df_data, invCropMatrix, total_layer);
+            layers_voxels = getLayerVoxel(df_data, invCropMatrix, carved_layer);
             // 取得training input
             input_vector = layers_voxels[0].pos;
             object_input_voxel.UpdateInstances(input_vector);
@@ -348,7 +348,7 @@ int main()
         ImGui::NewLine();
         ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
         if(ImGui::Button("Two step mapping")) {
-            for(int l = 0; l < total_layer - 1; l++) {
+            for(int l = 0; l < carved_layer; l++) {
                 cout<<"Mapping payer: "<<l<<endl;
                 twoStepMapping(layers_voxels[l], som_data, image);
             }
@@ -356,27 +356,27 @@ int main()
             color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
             object_color_model.RenewObject(color_model_vertices);
             // 儲存底層頂點
-            base_vertices = getModelVertices(df_data, total_layer - 1);
+            base_vertices = getModelVertices(df_data, carved_layer);
             object_base_layer.RenewObject(base_vertices);
             // 重製carved_df_data，並把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
             carved_df_data = df_data;
             for(int k = 0; k < df_data.resolution[2]; k++) {
                 for(int j = 0; j < df_data.resolution[1]; j++) {
                     for(int i = 0; i < df_data.resolution[0]; i++) {
-                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < total_layer - 1)
+                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
                             carved_df_data(i, j, k) = 0;
                     }
                 }
             }   
         }
         if(ImGui::Button("Engraving")) {
-            for(int i = 0; i < total_layer - 1; i++)
+            for(int i = 0; i < carved_layer; i++)
                 engravedCarving(layers_voxels[i], carved_df_data);
             carved_vertices = getModelVertices(carved_df_data, 0);
             object_carved_layer.RenewObject(carved_vertices);
         } ImGui::SameLine();
         if(ImGui::Button("Embossing")) {
-            for(int i = 0; i < total_layer - 1; i++)
+            for(int i = 0; i < carved_layer; i++)
                 embossedCarving(layers_voxels[i], carved_df_data);
             carved_vertices = getModelVertices(carved_df_data, 0);
             object_carved_layer.RenewObject(carved_vertices);
@@ -405,11 +405,11 @@ int main()
         }
         if(ImGui::Button("Reset carving effect")) {
             carved_df_data = df_data;
-            // 把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
+            // 把 0~layer - 1距離值的體素都設為模型，避免後續錯誤
             for(int k = 0; k < df_data.resolution[2]; k++) {
                 for(int j = 0; j < df_data.resolution[1]; j++) {
                     for(int i = 0; i < df_data.resolution[0]; i++) {
-                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < total_layer - 1)
+                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
                             carved_df_data(i, j, k) = 0;
                     }
                 }
