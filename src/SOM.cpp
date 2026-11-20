@@ -13,7 +13,7 @@ void SOM_c::initiateParameters(SomData &som_data) {
 
     iter_now = 0;
     learning_rate_now = learning_rate_init;
-    radius_init = radius_now = max(resolution[0], resolution[1]);
+    radius_init = radius_now = max(resolution[0], resolution[1]) / 2;
 
     if(anchor_points_idx == NULL) { // 只有第一次要初始化 之後可透過使用者修改
         anchor_points_idx = new glm::ivec3[5];
