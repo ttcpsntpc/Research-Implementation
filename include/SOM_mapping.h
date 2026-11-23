@@ -28,6 +28,7 @@ glm::ivec3 findPosBMU(SomData &som_data, glm::vec3 input_data);
 bool inTriangle(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
 glm::vec3 outerProjp(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 projp);
 glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm::vec3 p, SomData &som_data);
+bool isNodeIndexValid(SomData som_data, glm::ivec3 &A);
 void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<glm::vec3>> &image); // 算出LayerVoxels的color
 glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data);
 

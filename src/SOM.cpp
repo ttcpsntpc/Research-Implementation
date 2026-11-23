@@ -45,6 +45,7 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
     size = max - min;
 
     // initial position
+    // plane lattice index(0, 0)代表左下角 (w, h)代表右上角
     if(lattice_type == SQUARE) { // 初始化於max z上的面
         double x_gap = size.x / (resolution[0] - 1);
         double z_gap = size.z / (resolution[1] - 1);
@@ -133,13 +134,9 @@ void SOM_c::initiateLattice(vector<glm::vec3> &pos_data, SomData &som_data) {
     else cout<<"invalid lattices type number: "<<lattice_type<<endl;
 
     // initial texcoord
-    static random_device rd;
-    static std::mt19937 gen(rd());
-    static uniform_real_distribution<double> dis(0.0, 1.0);
-
     for(int j = 0; j < resolution[1]; j++) {
         for(int i = 0; i < resolution[0]; i++) {
-            som_data(i, j) = glm::vec3(dis(gen), dis(gen), 0.0f);
+            som_data(i, j) = glm::vec3((double)i / (resolution[0] - 1), (double)j / (resolution[1] - 1), 0.0f);
         }
     }
     for(int k = 0; k < 5; k++) { // 固定anchor points texcoord
@@ -190,13 +187,13 @@ glm::ivec3 SOM_c::findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
 }
 
 // 更新鄰域半徑
-double SOM_c::updateNeighbourhoodRadius()
+double SOM_c::getNeighbourhoodRadius()
 {
     return radius_init * exp((double)-iter_now * log(radius_init) / (double)iter_max);
 }
 
 // 更新學習率
-double SOM_c::updateLearningRate()
+double SOM_c::getLearningRate()
 {
     return learning_rate_init * exp((double)-iter_now / (double)iter_max);
 }
@@ -289,7 +286,6 @@ void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
 {
     iter_now++;
     // 1. pick a random input vector
-
     // 2. find the best matching unit (BMU)
     if((training_type) && (iter_now % anchor_value == 0)) { // 次數符合錨定值時
         BMU = anchor_points_idx[4]; // BMU直接設為中間的錨定點
@@ -300,8 +296,8 @@ void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
     
 
     // 3. update the radius and learning rate
-    radius_now = updateNeighbourhoodRadius();
-    learning_rate_now = updateLearningRate();
+    radius_now = getNeighbourhoodRadius();
+    learning_rate_now = getLearningRate();
     
     // 4. update the neighbor nodes
     #pragma omp parallel for collapse(3)
@@ -317,6 +313,8 @@ void SOM_c::runSOM(vector<glm::vec3> &mesh_data, glm::vec3 input_data)
             }
         }
     }
+
+    // only when training texcoords will SOM reset the anchor points' texcoords 
     if(training_type) {
         for(int i = 0; i < 5; i++) {
             int idx = anchor_points_idx[i][1] * resolution[0] + anchor_points_idx[i][0];

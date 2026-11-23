@@ -121,19 +121,136 @@ glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm:
     return projp;
 }
 
+// 用來判斷和BMU一起構成三角形的其他兩點是否在邊界內，在邊界內就順便改成對應的索引
+bool isNodeIndexValid(SomData som_data, glm::ivec3 &A) {
+    if(A.x < 0 || A.x > som_data.resolution[0] - 1 || A.y < 0 || A.y > som_data.resolution[1] - 1) { // x or y axis out of bound
+        if(som_data.lattice_type == SQUARE) {
+            return false;
+        } 
+        else if(som_data.lattice_type == CYLINDER) { 
+            if(A.y < 0 || A.y > som_data.resolution[1] - 1) // y axis out of bound
+                return false;
+            if(A.x < 0) // 其實只會是 A.x == -1
+                A.x += som_data.resolution[0];
+            else if(A.x > som_data.resolution[0] - 1)
+                A.x -= som_data.resolution[0];
+        }
+        else if(som_data.lattice_type == DONUT) {
+            if(A.x < 0)
+                A.x += som_data.resolution[0];
+            else if(A.x > som_data.resolution[0] - 1)
+                A.x -= som_data.resolution[0];
+            else if(A.y < 0) // 因為鄰居只會偏移x or y其中一個，所以不需要設成if
+                A.y += som_data.resolution[1];
+            else if(A.y > som_data.resolution[1] - 1)
+                A.y -= som_data.resolution[1];
+        } 
+        else if(som_data.lattice_type == CUBE) { 
+            int w = som_data.resolution[0];
+            int h = som_data.resolution[1];
+            glm::ivec3 old_A = A;
+            if(old_A.x < 0) {
+                static int face[] = {4, 4, 0, 0, 0, 0};
+                A.z = face[old_A.z];
+                if(old_A.z == 0 || old_A.z == 4)
+                    A.x = 1;
+                else if(old_A.z == 1 || old_A.z == 5)
+                    A.x = w - 2;
+                else if(old_A.z == 2) {
+                    A.x = old_A.y;
+                    A.y = 1;
+                } else if(old_A.z == 3) {
+                    A.x = old_A.y;
+                    A.y = h - 2;
+                }
+            }
+            else if (old_A.x > w - 1) {
+                static int face[] = {5, 5, 1, 1, 1, 1};
+                A.z = face[old_A.z];
+
+                if (old_A.z == 0 || old_A.z == 4) {
+                    A.x = 1;
+                    A.y = old_A.y;
+                } else if (old_A.z == 1 || old_A.z == 5) {
+                    A.x = w - 2;
+                    A.y = old_A.y;
+                } else if (old_A.z == 2) {
+                    A.x = old_A.y;
+                    A.y = 1;
+                } else if (old_A.z == 3) {
+                    A.x = old_A.y;
+                    A.y = h - 2;
+                }
+            }
+            else if (old_A.y < 0) {
+                static int face[] = {2, 2, 4, 4, 2, 2};
+                A.z = face[old_A.z];
+
+                if (old_A.z == 0) {
+                    A.x = 1;
+                    A.y = old_A.x;
+                } else if (old_A.z == 1) {
+                    A.x = w - 2;
+                    A.y = old_A.x;
+                } else if (old_A.z == 2 || old_A.z == 4) {
+                    A.x = old_A.x;
+                    A.y = 1;
+                } else if (old_A.z == 3 || old_A.z == 5) {
+                    A.x = old_A.x;
+                    A.y = h - 2;
+                }
+            }
+            else if (old_A.y > h - 1) {
+                static int face[] = {3, 3, 5, 5, 3, 3};
+                A.z = face[old_A.z];
+
+                if (old_A.z == 0) {
+                    A.x = 1;
+                    A.y = old_A.x;
+                } else if (old_A.z == 1) {
+                    A.x = w - 2;
+                    A.y = old_A.x;
+                } else if (old_A.z == 2 || old_A.z == 4) {
+                    A.x = old_A.x;
+                    A.y = 1;
+                } else if (old_A.z == 3 || old_A.z == 5) {
+                    A.x = old_A.x;
+                    A.y = h - 2;
+                }
+            }
+            // face->face(i, j)
+            // if x < 0
+            // 0->4(1, y) 1->4(w-2, y)
+            // 2->0(y, 1) 3->0(y, h-2)
+            // 4->0(1, y) 5->0(w-2, y)
+            // else if x > w - 1
+            // 0->5(1, y) 1->5(w-2, y)
+            // 2->1(y, 1) 3->1(y, h-2)
+            // 4->1(1, y) 5->1(w-2, y)
+            // if y < 0
+            // 0->2(1, x) 1->2(w-2, x)
+            // 2->4(x, 1) 3->4(x, h-2)
+            // 4->2(x, 1) 5->2(x, h-2)
+            // else if y > h - 1
+            // 0->3(1, x) 1->3(w-2, x)
+            // 2->5(x, 1) 3->5(x, h-2)
+            // 4->3(x, 1) 5->3(x, h-2)
+        }
+    }
+    return true;
+}
+
 // 在BMU鄰近三角片中找與input最短距離的投影點的texcoord
 glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
     glm::ivec3 BMU = findPosBMU(som_data, voxel);
     double min_distance = numeric_limits<double>::max();
     glm::vec2 texcoord;
-
     for(int i = 0; i < 4; i++) {
         // 三角形頂點index
         glm::ivec3 A = BMU + offset[i];
         glm::ivec3 B = BMU + offset[i + 1];
         // 超出範圍就跳過這個三角形
-        if(A.x < 0 || A.x > som_data.resolution[0] - 1 || A.y < 0 || A.y > som_data.resolution[1] - 1 ||
-           B.x < 0 || B.x > som_data.resolution[0] - 1 || B.y < 0 || B.y > som_data.resolution[1] - 1)
+        if(!isNodeIndexValid(som_data, A) || !isNodeIndexValid(som_data, B))
             continue;
         // 取得三角形位置
         glm::vec3 a = som_data(A.x, A.y, A.z);
@@ -164,10 +281,11 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
     layer_voxels.color.resize(size);
     int height = image.size();
     int width = image[0].size();
+
     for(int i = 0; i < size; i++) {
         // SOM mapping
-        glm::vec3 voxel_index = layer_voxels.pos[i];
-        glm::vec2 texcoord = SOMMapping(voxel_index + glm::vec3{0.5f, 0.5f, 0.5f}, som_data); // 體素中心點映射後的texcoord
+        glm::vec3 voxel_pos = layer_voxels.pos[i];
+        glm::vec2 texcoord = SOMMapping(voxel_pos + glm::vec3{0.5f, 0.5f, 0.5f}, som_data); // 體素中心點映射後的texcoord
         // texture mapping
         if(tex_filter == NEAREST) { 
             glm::ivec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1) + 0.5f); // 四捨五入 + 轉型
@@ -197,14 +315,23 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
             }
             else if(size_filter == MINIFICATION) {
                 // texcoord
-                glm::vec2 texcoord_000 = SOMMapping(voxel_index, som_data); // 體素左下後點映射後的texcoord
-                glm::vec2 texcoord_111 = SOMMapping(voxel_index + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
+                glm::vec2 temp0 = SOMMapping(voxel_pos, som_data); // 體素左下後點映射後的texcoord
+                glm::vec2 temp1 = SOMMapping(voxel_pos + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
+                glm::vec2 texcoord_000 = glm::min(temp0, temp1);
+                glm::vec2 texcoord_111 = glm::max(temp0, temp1);
                 // texture map index // 四捨五入 + 轉型
-                glm::ivec2 texel_index_000 = (texcoord_000 * glm::vec2(width - 1, height - 1));
-                glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
+                // glm::ivec2 texel_index_000 = texcoord_000 * glm::vec2(width - 1, height - 1);
+                // glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
+                glm::ivec2 texel_index_000 = glm::ivec2(texcoord_000 * glm::vec2(width - 1, height - 1));
+                glm::ivec2 texel_index_111 = glm::ivec2((texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f);
                 // start and end point of texture map index
                 glm::ivec2 t0 = glm::min(texel_index_000, texel_index_111);
                 glm::ivec2 t1 = glm::max(texel_index_000, texel_index_111);
+                if (glm::any(glm::isnan(temp0)) || glm::any(glm::isnan(temp1))) {
+                    cout<<t0.x<<" "<<t0.y<<" "<<t1.x<<" "<<t1.y<<endl;
+                    std::cout << "NaN at voxel_pos: "
+                            << voxel_pos.x << ", " << voxel_pos.y << ", " << voxel_pos.z << "\n";
+                }
                 // box filter
                 int num = 0;
                 glm::vec3 color = {0.0f, 0.0f, 0.0f};

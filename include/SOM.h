@@ -25,7 +25,7 @@ enum LatticesType {
 // 0 3 1   left top right 
 //   5          front
 struct SomData {
-    int resolution[3]; // neuron: width height faces
+    int resolution[3]; // neuron: width height faces // 其實 width = height 否則CUBE無法計算
     vector<glm::vec3> texcoord; // r coordinate用不到 // 方便find BMU function的統一
     vector<glm::vec3> pos;
 
@@ -90,9 +90,9 @@ public:
 private:
     glm::ivec3 BMU;
     glm::ivec3 findBMU(vector<glm::vec3> &mesh_data, glm::vec3 input_data);
-    double updateNeighbourhoodRadius();
+    double getNeighbourhoodRadius();
     double calculateInfluence(glm::ivec3 BMU, glm::ivec3 now_point);
-    double updateLearningRate();
+    double getLearningRate();
 
     glm::ivec3 calculateCubeIndexPos(glm::ivec3 idx);
 };
