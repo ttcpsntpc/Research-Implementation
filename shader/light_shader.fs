@@ -18,7 +18,7 @@ void main(){
 }
 
 vec3 PhongShading(vec3 gradient,vec3 color){
-    float Ka = 0.2, Kd = 0.8, Ks = 0.4;
+    float Ka = 0.2, Kd = 0.8, Ks = 0.1;
     vec3 Ia = color;
     vec3 Id = color;
     vec3 Is = vec3(1.0, 1.0, 1.0);

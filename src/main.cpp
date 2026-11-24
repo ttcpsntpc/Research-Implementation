@@ -175,7 +175,7 @@ int main()
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
-    VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
+    VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
     VolumeData carved_df_data;
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0);
@@ -278,6 +278,7 @@ int main()
             int size = input_vector.size();
             using param_t = std::uniform_int_distribution<int>::param_type; // 用左式取代右式一長串
             dis_int.param(param_t(0, size - 1));
+            is_layer_changed = false;
             is_SOM_reset = true;
         }
         ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
