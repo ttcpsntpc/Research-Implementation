@@ -131,19 +131,19 @@ bool isNodeIndexValid(SomData som_data, glm::ivec3 &A) {
             if(A.y < 0 || A.y > som_data.resolution[1] - 1) // y axis out of bound
                 return false;
             if(A.x < 0) // 其實只會是 A.x == -1
-                A.x += som_data.resolution[0];
+                A.x += som_data.resolution[0] - 1; // 要位移 width - 1 才會到對應的node index
             else if(A.x > som_data.resolution[0] - 1)
-                A.x -= som_data.resolution[0];
+                A.x -= som_data.resolution[0] - 1;
         }
         else if(som_data.lattice_type == DONUT) {
             if(A.x < 0)
-                A.x += som_data.resolution[0];
+                A.x += som_data.resolution[0] - 1;
             else if(A.x > som_data.resolution[0] - 1)
-                A.x -= som_data.resolution[0];
+                A.x -= som_data.resolution[0] - 1;
             else if(A.y < 0) // 因為鄰居只會偏移x or y其中一個，所以不需要設成if
-                A.y += som_data.resolution[1];
+                A.y += som_data.resolution[1] - 1;
             else if(A.y > som_data.resolution[1] - 1)
-                A.y -= som_data.resolution[1];
+                A.y -= som_data.resolution[1] - 1;
         } 
         else if(som_data.lattice_type == CUBE) { 
             int w = som_data.resolution[0];
@@ -320,18 +320,11 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                 glm::vec2 texcoord_000 = glm::min(temp0, temp1);
                 glm::vec2 texcoord_111 = glm::max(temp0, temp1);
                 // texture map index // 四捨五入 + 轉型
-                // glm::ivec2 texel_index_000 = texcoord_000 * glm::vec2(width - 1, height - 1);
-                // glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
-                glm::ivec2 texel_index_000 = glm::ivec2(texcoord_000 * glm::vec2(width - 1, height - 1));
-                glm::ivec2 texel_index_111 = glm::ivec2((texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f);
+                glm::ivec2 texel_index_000 = texcoord_000 * glm::vec2(width - 1, height - 1);
+                glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
                 // start and end point of texture map index
                 glm::ivec2 t0 = glm::min(texel_index_000, texel_index_111);
                 glm::ivec2 t1 = glm::max(texel_index_000, texel_index_111);
-                if (glm::any(glm::isnan(temp0)) || glm::any(glm::isnan(temp1))) {
-                    cout<<t0.x<<" "<<t0.y<<" "<<t1.x<<" "<<t1.y<<endl;
-                    std::cout << "NaN at voxel_pos: "
-                            << voxel_pos.x << ", " << voxel_pos.y << ", " << voxel_pos.z << "\n";
-                }
                 // box filter
                 int num = 0;
                 glm::vec3 color = {0.0f, 0.0f, 0.0f};

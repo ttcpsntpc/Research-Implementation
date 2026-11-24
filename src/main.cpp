@@ -175,7 +175,7 @@ int main()
     Object_c object_df_voxel;
     object_df_voxel.CreateObject(vertices[5], {});
 
-    VolumeData df_data = ReadVolumeFile("../../raw/df_data/teapot_dist.inf", "../../raw/df_data/teapot_df.raw", false); // 學姊的
+    VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
     VolumeData carved_df_data;
     // 取得體素表面頂點
     vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0);
