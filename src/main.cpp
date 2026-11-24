@@ -831,7 +831,7 @@ vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int lay
                 if (local_pos.x >= 0.0f && local_pos.x <= 1.0f && local_pos.y >= 0.0f && local_pos.y <= 1.0f && local_pos.z >= 0.0f && local_pos.z <= 1.0f) {
                     for(int l = 0; l < layer; l++) {
                         if(df_data(i, j, k) == l)
-                            layers_voxels[l].pos.push_back({i, j, k});
+                            layers_voxels[l].pos.push_back(voxel);
                     }
                 }
             }

@@ -314,17 +314,28 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                 layer_voxels.color[i] = (1 - dx) * (1 - dy) * c00 + dx * (1 - dy) * c10 + (1 - dx) * dy * c01 + dx * dy * c11;
             }
             else if(size_filter == MINIFICATION) {
-                // texcoord
-                glm::vec2 temp0 = SOMMapping(voxel_pos, som_data); // 體素左下後點映射後的texcoord
-                glm::vec2 temp1 = SOMMapping(voxel_pos + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
-                glm::vec2 texcoord_000 = glm::min(temp0, temp1);
-                glm::vec2 texcoord_111 = glm::max(temp0, temp1);
-                // texture map index // 四捨五入 + 轉型
-                glm::ivec2 texel_index_000 = texcoord_000 * glm::vec2(width - 1, height - 1);
-                glm::ivec2 texel_index_111 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
-                // start and end point of texture map index
-                glm::ivec2 t0 = glm::min(texel_index_000, texel_index_111);
-                glm::ivec2 t1 = glm::max(texel_index_000, texel_index_111);
+                // 法1: 可能會有原本需從(w-2, h-2)~(1, 1)變成(1. 1)~(w-2, h-2)的情況
+                // // texcoord
+                // glm::vec2 texcoord0 = SOMMapping(voxel_pos, som_data); // 體素左下後點映射後的texcoord
+                // glm::vec2 texcoord1 = SOMMapping(voxel_pos + glm::vec3{1.0f, 1.0f, 1.0f}, som_data); // 體素有上前點映射後的texcoord
+                // glm::vec2 texcoord_000 = glm::min(texcoord0, texcoord1);
+                // glm::vec2 texcoord_111 = glm::max(texcoord0, texcoord1);
+                // // texture map index // 四捨五入 + 轉型
+                // glm::ivec2 t0 = texcoord_000 * glm::vec2(width - 1, height - 1);
+                // glm::ivec2 t1 = (texcoord_111 * glm::vec2(width - 1, height - 1)) + 0.5f;
+                // 法2: 
+                // 理想情況，SOM最後完美貼合模型，模型也平均散開成表面沒有體素被包住，張開來變成兩張長寬比相同但不同解析度的平面在映射 
+                // 因此在SOM布貼合模型時很不準
+                // -> (width / ratio) * (height / ratio) = #(voxels) -> ratio = sqrt((width * height) / #(voxels))
+                float radius = sqrt((width * height) / size) / 2;
+                // texture map index 
+                glm::vec2 texcoord_index = texcoord * glm::vec2(width - 1, height - 1);
+                // index range (might have float index)
+                glm::vec2 texcoord_index_000 = texcoord_index - radius;
+                glm::vec2 texcoord_index_111 = texcoord_index + radius;
+                // clamp to the border and directly convert to int format
+                glm::ivec2 t0((texcoord_index_000.x < 0) ? 0 : texcoord_index_000.x, (texcoord_index_000.y < 0) ? 0 : texcoord_index_000.y);
+                glm::ivec2 t1((texcoord_index_111.x > width - 1) ? width - 1 : texcoord_index_111.x, (texcoord_index_111.y > height - 1) ? height - 1 : texcoord_index_111.y);
                 // box filter
                 int num = 0;
                 glm::vec3 color = {0.0f, 0.0f, 0.0f};
@@ -336,9 +347,6 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
                 }
                 color /= num;
                 layer_voxels.color[i] = color;
-                // 另一種想法:
-                // 理想情況，SOM最後完美貼合模型，模型也平均散開成表面沒有體素被包住，張開來變成兩張長寬比相同但不同解析度的平面在映射 
-                // -> (width * ratio) * (height * ratio) = #(voxels) -> ratio = sqrt(#(voxels) / (width * height))
             }
         }
     }
