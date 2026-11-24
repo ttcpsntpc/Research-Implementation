@@ -94,6 +94,7 @@ SOM_c SOM;
 vector<LayerVoxels> layers_voxels;
 double carving_threshold = 0.7;
 char screenshot_name[128] = "../../screenshot/test.png";
+bool is_draw_imgui = true;
 
 void updateCropMatrix() {
     scaleMat = glm::scale(glm::mat4(1.0f), target_scale);
@@ -224,6 +225,7 @@ int main()
     const char *filter_names[] = {"Linear", "Nearest"};
     const char *Q_object_names[] = {"Camera", "Light", "Input BB"};
     int carved_layer = 1;
+    int dilation_threshold = 3, erosion_threshold = 3;
 
     // render loop
     // -----------
@@ -251,177 +253,189 @@ int main()
         ImGui::NewFrame();
         UI.render(lightPos, camera.Position);
         
-        ImGui::Begin("GUI");
-        ImGui::SliderInt("Training type", &moveObject, 0, 2, Q_object_names[moveObject]);
-        if(ImGui::InputInt("model layer (0 ~ x)", &carved_layer)) {
-            if(carved_layer < 1)
-                carved_layer = 1;
-            else is_layer_changed = true;
-        } 
-        if(is_layer_changed) {
-            if(ImGui::Button("Modify layer voxel")) {
+        if(is_draw_imgui) {
+            ImGui::Begin("GUI");
+            ImGui::PushItemWidth(150.0f);
+            ImGui::SliderInt("Training type", &moveObject, 0, 2, Q_object_names[moveObject]);
+            if(ImGui::InputInt("model layer (0 ~ x)", &carved_layer)) {
+                if(carved_layer < 1)
+                    carved_layer = 1;
+                else is_layer_changed = true;
+            } 
+            ImGui::PopItemWidth();
+            if(is_layer_changed) {
+                if(ImGui::Button("Modify layer voxel")) {
+                    // 取得layer voxel
+                    glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
+                    layers_voxels = getLayerVoxel(df_data, invCropMatrix, carved_layer);
+                    is_layer_changed = false;
+                }
+            }
+            // input擷取框資訊
+            ImGui::SetNextItemWidth(300.0f);
+            ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
+            ImGui::SetNextItemWidth(300.0f);
+            ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
+            if(ImGui::Button("Get BB layer voxel")) {
                 // 取得layer voxel
                 glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
                 layers_voxels = getLayerVoxel(df_data, invCropMatrix, carved_layer);
+                // 取得training input
+                input_vector = layers_voxels[0].pos;
+                object_input_voxel.UpdateInstances(input_vector);
+                // 重製亂數範圍
+                int size = input_vector.size();
+                using param_t = std::uniform_int_distribution<int>::param_type; // 用左式取代右式一長串
+                dis_int.param(param_t(0, size - 1));
                 is_layer_changed = false;
+                is_SOM_reset = true;
             }
-        }
-        // input擷取框資訊
-        ImGui::InputFloat3("input BB translate vector", &target_translate.x, "%.3f");
-        ImGui::InputFloat3("input BB scaling vector", &target_scale.x, "%.3f");
-        if(ImGui::Button("Get BB layer voxel")) {
-            // 取得layer voxel
-            glm::mat4 invCropMatrix = glm::inverse(cropMatrix);
-            layers_voxels = getLayerVoxel(df_data, invCropMatrix, carved_layer);
-            // 取得training input
-            input_vector = layers_voxels[0].pos;
-            object_input_voxel.UpdateInstances(input_vector);
-            // 重製亂數範圍
-            int size = input_vector.size();
-            using param_t = std::uniform_int_distribution<int>::param_type; // 用左式取代右式一長串
-            dis_int.param(param_t(0, size - 1));
-            is_layer_changed = false;
-            is_SOM_reset = true;
-        }
-        ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
-        ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
-        ImGui::NewLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.5f, 1.0f)); 
-        if(ImGui::Button("Screenshot")) 
-            is_screenshot = true;
-        ImGui::PopStyleColor(1);
-        ImGui::SameLine();
-        ImGui::InputText("Screenshot name", screenshot_name, sizeof(screenshot_name));
-        // 模型不同距離值形成的集和
-        ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
-        if(ImGui::Button("Update voxels")) {
-            vector<glm::vec3> cube_pos;
-            for(int i = 0; i < df_data.resolution[0]; i++)
-                for(int j = 0; j < df_data.resolution[1]; j++)
-                    for(int k = 0; k < df_data.resolution[2]; k++) 
-                        if(df_data(i, j, k) > distance_range - 0.5 && df_data(i, j, k) < distance_range + 0.5)
-                            cube_pos.push_back({i, j, k});
-            cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
-            object_df_voxel.UpdateInstances(cube_pos);
-        }
-        ImGui::Checkbox("model surface faces", &is_draw_model_surface); ImGui::SameLine();
-        ImGui::Checkbox("model df-voxels", &is_draw_df_voxels); ImGui::SameLine();
-        ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
-        ImGui::End();
-
-        // SOM
-        ImGui::Begin("SOM");
-        if(ImGui::InputText("Image Path", image_path, sizeof(image_path), ImGuiInputTextFlags_EnterReturnsTrue)) 
-            image = getTexture(image_path, texture);
-        if(ImGui::Button("Load image"))
-            image = getTexture(image_path, texture);
-        // ImGui::Image((ImTextureID)(intptr_t)texture, ImVec2(256, 256)); // 可以在imgui顯示圖片
-        if (ImGui::RadioButton("PLANE", &lattice_type, SQUARE)) { 
-            som_data.setType(SQUARE);
-            is_SOM_reset = true;
-        } ImGui::SameLine();
-        if (ImGui::RadioButton("CYLINDER", &lattice_type, CYLINDER)) { 
-            som_data.setType(CYLINDER);
-            is_SOM_reset = true;
-        } ImGui::SameLine();
-        if (ImGui::RadioButton("DONUT", &lattice_type, DONUT)) { 
-            som_data.setType(DONUT);
-            is_SOM_reset = true;
-        } ImGui::SameLine();
-        if (ImGui::RadioButton("CUBE", &lattice_type, CUBE)) { 
-            som_data.setType(CUBE);
-            is_SOM_reset = true;
-        }
-        if(ImGui::SliderInt("Training type", &SOM.training_type, 0, 1, type_names[SOM.training_type])) {
-            SOM.initiateParameters(som_data);
-            is_SOM_start = false;
-        }
-        if(SOM.training_type) {
-            ImGui::InputInt("anchor value (>=1)", &SOM.anchor_value, 100, 1000);
-        }
-        if (ImGui::Button("Run")) is_SOM_start = true; ImGui::SameLine();
-        if (ImGui::Button("Stop")) is_SOM_start = false;
-
-        ImGui::Text("iter: %d", SOM.iter_now);
-        ImGui::Text("radius: %f", SOM.radius_now);
-        ImGui::Text("learning rate: %f", SOM.learning_rate_now);
-        ImGui::Checkbox("SOM mesh", &is_draw_SOM); ImGui::SameLine();
-        ImGui::Checkbox("Fill", &is_SOM_filled); 
-        ImGui::NewLine();
-        ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
-        if(ImGui::Button("Two step mapping")) {
-            for(int l = 0; l < carved_layer; l++) {
-                cout<<"Mapping payer: "<<l<<endl;
-                twoStepMapping(layers_voxels[l], som_data, image);
+            ImGui::Checkbox("input BB", &is_draw_input_BB); ImGui::SameLine();
+            ImGui::Checkbox("input voxels", &is_draw_input_voxels); 
+            ImGui::NewLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.5f, 0.5f, 1.0f)); 
+            if(ImGui::Button("Screenshot")) 
+                is_screenshot = true;
+            ImGui::PopStyleColor(1);
+            ImGui::SameLine();
+            ImGui::InputText("Screenshot name", screenshot_name, sizeof(screenshot_name));
+            // 模型不同距離值形成的集和
+            ImGui::SliderInt("showing distance", &distance_range, ((int)df_data.minimum - 1), (int)df_data.maximum + 1);
+            if(ImGui::Button("Update voxels")) {
+                vector<glm::vec3> cube_pos;
+                for(int i = 0; i < df_data.resolution[0]; i++)
+                    for(int j = 0; j < df_data.resolution[1]; j++)
+                        for(int k = 0; k < df_data.resolution[2]; k++) 
+                            if(df_data(i, j, k) > distance_range - 0.5 && df_data(i, j, k) < distance_range + 0.5)
+                                cube_pos.push_back({i, j, k});
+                cout<<"distance: "<<distance_range<<"  voxel number: "<<cube_pos.size()<<endl;
+                object_df_voxel.UpdateInstances(cube_pos);
             }
-            // 儲存模型表面顏色頂點
-            color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
-            object_color_model.RenewObject(color_model_vertices);
-            // 儲存底層頂點
-            base_vertices = getModelVertices(df_data, carved_layer);
-            object_base_layer.RenewObject(base_vertices);
-            // 重製carved_df_data，並把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
-            carved_df_data = df_data;
-            for(int k = 0; k < df_data.resolution[2]; k++) {
-                for(int j = 0; j < df_data.resolution[1]; j++) {
-                    for(int i = 0; i < df_data.resolution[0]; i++) {
-                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
-                            carved_df_data(i, j, k) = 0;
+            ImGui::Checkbox("model surface faces", &is_draw_model_surface); ImGui::SameLine();
+            ImGui::Checkbox("model df-voxels", &is_draw_df_voxels); ImGui::SameLine();
+            ImGui::Checkbox("model bounding box", &is_draw_bounding_box);
+            ImGui::End();
+
+            // SOM
+            ImGui::Begin("SOM");
+            if(ImGui::InputText("Image Path", image_path, sizeof(image_path), ImGuiInputTextFlags_EnterReturnsTrue)) 
+                image = getTexture(image_path, texture);
+            if(ImGui::Button("Load image"))
+                image = getTexture(image_path, texture);
+            // ImGui::Image((ImTextureID)(intptr_t)texture, ImVec2(256, 256)); // 可以在imgui顯示圖片
+            if (ImGui::RadioButton("PLANE", &lattice_type, SQUARE)) { 
+                som_data.setType(SQUARE);
+                is_SOM_reset = true;
+            } ImGui::SameLine();
+            if (ImGui::RadioButton("CYLINDER", &lattice_type, CYLINDER)) { 
+                som_data.setType(CYLINDER);
+                is_SOM_reset = true;
+            } ImGui::SameLine();
+            if (ImGui::RadioButton("DONUT", &lattice_type, DONUT)) { 
+                som_data.setType(DONUT);
+                is_SOM_reset = true;
+            } ImGui::SameLine();
+            if (ImGui::RadioButton("CUBE", &lattice_type, CUBE)) { 
+                som_data.setType(CUBE);
+                is_SOM_reset = true;
+            }
+            ImGui::PushItemWidth(150.0f);
+            if(ImGui::SliderInt("Training type", &SOM.training_type, 0, 1, type_names[SOM.training_type])) {
+                SOM.initiateParameters(som_data);
+                is_SOM_start = false;
+            }
+            if(SOM.training_type) {
+                ImGui::InputInt("anchor value (>=1)", &SOM.anchor_value, 100, 1000);
+            }
+            if (ImGui::Button("Run")) is_SOM_start = true; ImGui::SameLine();
+            if (ImGui::Button("Stop")) is_SOM_start = false;
+
+            ImGui::Text("iter: %d", SOM.iter_now);
+            ImGui::Text("radius: %f", SOM.radius_now);
+            ImGui::Text("learning rate: %f", SOM.learning_rate_now);
+            ImGui::Checkbox("SOM mesh", &is_draw_SOM); ImGui::SameLine();
+            ImGui::Checkbox("Fill", &is_SOM_filled); 
+            ImGui::NewLine();
+            ImGui::SliderInt("Texture filter", reinterpret_cast<int*>(&tex_filter), 0, 1, filter_names[tex_filter]);
+            ImGui::PopItemWidth();
+            if(ImGui::Button("Two step mapping")) {
+                for(int l = 0; l < carved_layer; l++) {
+                    cout<<"Mapping payer: "<<l<<endl;
+                    twoStepMapping(layers_voxels[l], som_data, image);
+                }
+                // 儲存模型表面顏色頂點
+                color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
+                object_color_model.RenewObject(color_model_vertices);
+                // 儲存底層頂點
+                base_vertices = getModelVertices(df_data, carved_layer);
+                object_base_layer.RenewObject(base_vertices);
+                // 重製carved_df_data，並把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
+                carved_df_data = df_data;
+                for(int k = 0; k < df_data.resolution[2]; k++) {
+                    for(int j = 0; j < df_data.resolution[1]; j++) {
+                        for(int i = 0; i < df_data.resolution[0]; i++) {
+                            if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
+                                carved_df_data(i, j, k) = 0;
+                        }
+                    }
+                }   
+            }
+            if(ImGui::Button("Engraving")) {
+                for(int i = 0; i < carved_layer; i++)
+                    engravedCarving(layers_voxels[i], carved_df_data);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            } ImGui::SameLine();
+            if(ImGui::Button("Embossing")) {
+                for(int i = 0; i < carved_layer; i++)
+                    embossedCarving(layers_voxels[i], carved_df_data);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            }
+            if(ImGui::Button("Dilation")) {
+                dilation(carved_df_data, dilation_threshold);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            } ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::InputInt("   ", &dilation_threshold); ImGui::SameLine();
+            if(ImGui::Button("Erosion")) {
+                erosion(carved_df_data, erosion_threshold);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            } ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::InputInt(" ", &erosion_threshold);
+            if(ImGui::Button("Opening")) {
+                erosion(carved_df_data, erosion_threshold);
+                dilation(carved_df_data, dilation_threshold);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            } ImGui::SameLine();
+            if(ImGui::Button("Closing")) {
+                dilation(carved_df_data, dilation_threshold);
+                erosion(carved_df_data, erosion_threshold);
+                carved_vertices = getModelVertices(carved_df_data, 0);
+                object_carved_layer.RenewObject(carved_vertices);
+            }
+            if(ImGui::Button("Reset carving effect")) {
+                carved_df_data = df_data;
+                // 把 0~layer - 1距離值的體素都設為模型，避免後續錯誤
+                for(int k = 0; k < df_data.resolution[2]; k++) {
+                    for(int j = 0; j < df_data.resolution[1]; j++) {
+                        for(int i = 0; i < df_data.resolution[0]; i++) {
+                            if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
+                                carved_df_data(i, j, k) = 0;
+                        }
                     }
                 }
-            }   
-        }
-        if(ImGui::Button("Engraving")) {
-            for(int i = 0; i < carved_layer; i++)
-                engravedCarving(layers_voxels[i], carved_df_data);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        } ImGui::SameLine();
-        if(ImGui::Button("Embossing")) {
-            for(int i = 0; i < carved_layer; i++)
-                embossedCarving(layers_voxels[i], carved_df_data);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        }
-        if(ImGui::Button("Dilation")) {
-            dilation(carved_df_data, 3);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        } ImGui::SameLine();
-        if(ImGui::Button("Erosion")) {
-            erosion(carved_df_data, 3);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        }
-        if(ImGui::Button("Opening")) {
-            erosion(carved_df_data, 3);
-            dilation(carved_df_data, 3);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        } ImGui::SameLine();
-        if(ImGui::Button("Closing")) {
-            dilation(carved_df_data, 3);
-            erosion(carved_df_data, 3);
-            carved_vertices = getModelVertices(carved_df_data, 0);
-            object_carved_layer.RenewObject(carved_vertices);
-        }
-        if(ImGui::Button("Reset carving effect")) {
-            carved_df_data = df_data;
-            // 把 0~layer - 1距離值的體素都設為模型，避免後續錯誤
-            for(int k = 0; k < df_data.resolution[2]; k++) {
-                for(int j = 0; j < df_data.resolution[1]; j++) {
-                    for(int i = 0; i < df_data.resolution[0]; i++) {
-                        if(df_data(i, j, k) > 0 && df_data(i, j, k) < carved_layer)
-                            carved_df_data(i, j, k) = 0;
-                    }
-                }
+                object_carved_layer.RenewObject({});
             }
-            object_carved_layer.RenewObject({});
+            ImGui::Checkbox("Color model", &is_draw_color_model); 
+            ImGui::Checkbox("carved model", &is_draw_carved_model); ImGui::SameLine();
+            ImGui::Checkbox("base layer", &is_draw_base_layer); 
+            ImGui::End();
         }
-        ImGui::Checkbox("Color model", &is_draw_color_model); 
-        ImGui::Checkbox("carved model", &is_draw_carved_model); ImGui::SameLine();
-        ImGui::Checkbox("base layer", &is_draw_base_layer); 
-        ImGui::End();
 
         // ============================== Control operation ==============================
         if(is_SOM_reset) { // 選取目標區域跟改lattice type時要reset
@@ -648,6 +662,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         return;
     if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
         moveObject = (moveObject + 1) % 3;
+    }
+    if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
+        is_draw_imgui = !is_draw_imgui;
     }
 }
 
@@ -1033,11 +1050,11 @@ void erosion(VolumeData &carved_df_data, int threshold) {
         for(int j = 1; j < resolution[1] - 1; j++) {
             for(int i = 1; i < resolution[0] - 1; i++) {
                 // 六個鄰居有threshld個以上白色就設為白色(空氣)(距離值!=0)
-                if(temp_data(i, j, k) == 0) { // 利用只有模型需要判斷來加速，之後距離值改變可能有危險!
+                if(temp_data(i, j, k) == 0) { // 利用只有模型需要判斷來加速，之後使用不同距離值可能有危險!
                     int count = 0;
                     for(int d = 0; d < 6; d++) {
                         glm::ivec3 index = glm::ivec3(i, j, k) + offset[d]; 
-                        if(temp_data(index.x, index.y, index.z) > 0)
+                        if(temp_data(index.x, index.y, index.z) != 0)
                             count++;
                     }
                     if(count >= threshold)
@@ -1065,8 +1082,14 @@ void dilation(VolumeData &carved_df_data, int threshold) {
                         if(temp_data(index.x, index.y, index.z) == 0)
                             count++;
                     }
-                    if(count >= threshold)
+                    if(count >= threshold) {
                         carved_df_data(i, j, k) = 0;
+                        for(int d = 0; d < 6; d++) {
+                            glm::ivec3 index = glm::ivec3(i, j, k) + offset[d]; 
+                            if(carved_df_data(index.x, index.y, index.z) != 0)
+                                carved_df_data(index.x, index.y, index.z) == 1;
+                        }
+                    }
                 }
             }
         }
