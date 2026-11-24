@@ -222,6 +222,7 @@ int main()
 
     const char *type_names[] = {"position", "texture"};
     const char *filter_names[] = {"Linear", "Nearest"};
+    const char *Q_object_names[] = {"Camera", "Light", "Input BB"};
     int carved_layer = 1;
 
     // render loop
@@ -251,6 +252,7 @@ int main()
         UI.render(lightPos, camera.Position);
         
         ImGui::Begin("GUI");
+        ImGui::SliderInt("Training type", &moveObject, 0, 2, Q_object_names[moveObject]);
         if(ImGui::InputInt("model layer (0 ~ x)", &carved_layer)) {
             if(carved_layer < 1)
                 carved_layer = 1;

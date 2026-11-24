@@ -282,6 +282,11 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
     int height = image.size();
     int width = image[0].size();
 
+    if(width * height < size)
+        size_filter = MAGNIFICATION;
+    else 
+        size_filter = MINIFICATION;
+        
     for(int i = 0; i < size; i++) {
         // SOM mapping
         glm::vec3 voxel_pos = layer_voxels.pos[i];
@@ -293,10 +298,6 @@ void twoStepMapping(LayerVoxels &layer_voxels, SomData &som_data, vector<vector<
             layer_voxels.color[i] = image[texel_index.y][texel_index.x];
         } 
         else if(tex_filter == LINEAR) { 
-            if(width * height < size)
-                size_filter = MAGNIFICATION;
-            else 
-                size_filter = MINIFICATION;
             glm::vec2 texel_index = (texcoord * glm::vec2(width - 1, height - 1));
             if(size_filter == MAGNIFICATION) {
                 glm::ivec2 texel_IJ = (glm::ivec2)texel_index; // 左下角texel
