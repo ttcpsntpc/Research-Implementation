@@ -42,7 +42,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 void processInput(GLFWwindow *window);
 
 // extra function
-vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, glm::vec3 out_color, glm::vec3 in_color);
+vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, VolumeData &base_df_data, int target_layer, glm::vec3 out_color, glm::vec3 in_color);
 vector<Vertex_c> getLatticesVertices(SomData som_data);
 vector<Vertex_c> getColorModelVertices(LayerVoxels &layer_voxels, VolumeData &df_data, glm::vec3 uncarved_color);
 vector<LayerVoxels> getLayerVoxel(VolumeData &df_data, glm::mat4 matrix, int layer);
@@ -179,7 +179,7 @@ int main()
     VolumeData df_data = ReadVolumeFile("../../raw/df_data/vase_dist.inf", "../../raw/df_data/vase_df.raw", false); // 學姊的
     VolumeData carved_df_data;
     // 取得體素表面頂點
-    vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+    vector<Vertex_c> voxel_vertex = getModelVertices(df_data, 0, df_data, 1, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
     Object_c object_model;
     object_model.CreateObject(voxel_vertex, {});
 
@@ -364,10 +364,10 @@ int main()
                     twoStepMapping(layers_voxels[l], som_data, image);
                 }
                 // 儲存模型表面顏色頂點
-                color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.5, 0.0});
+                color_model_vertices = getColorModelVertices(layers_voxels[0], df_data, {1.0, 0.65, 0.0});
                 object_color_model.RenewObject(color_model_vertices);
                 // 儲存底層頂點
-                base_vertices = getModelVertices(df_data, carved_layer, {1.0, 0.2, 0.8}, {1.0, 0.2, 0.8});
+                base_vertices = getModelVertices(df_data, carved_layer, df_data, carved_layer, {1.0, 0.2, 0.8}, {1.0, 0.2, 0.8});
                 object_base_layer.RenewObject(base_vertices);
                 // 重製carved_df_data，並把 0~layer - 2距離值的體素都設為模型，避免後續錯誤
                 carved_df_data = df_data;
@@ -383,25 +383,25 @@ int main()
             if(ImGui::Button("Engraving")) {
                 for(int i = 0; i < carved_layer; i++)
                     engravedCarving(layers_voxels[i], carved_df_data);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             } ImGui::SameLine();
             if(ImGui::Button("Embossing")) {
                 for(int i = 0; i < carved_layer; i++)
                     embossedCarving(layers_voxels[i], carved_df_data);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             }
             if(ImGui::Button("Dilation")) {
                 dilation(carved_df_data, dilation_threshold);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             } ImGui::SameLine();
             ImGui::SetNextItemWidth(80.0f);
             ImGui::InputInt("   ", &dilation_threshold); ImGui::SameLine();
             if(ImGui::Button("Erosion")) {
                 erosion(carved_df_data, erosion_threshold);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             } ImGui::SameLine();
             ImGui::SetNextItemWidth(80.0f);
@@ -409,13 +409,13 @@ int main()
             if(ImGui::Button("Opening")) {
                 erosion(carved_df_data, erosion_threshold);
                 dilation(carved_df_data, dilation_threshold);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             } ImGui::SameLine();
             if(ImGui::Button("Closing")) {
                 dilation(carved_df_data, dilation_threshold);
                 erosion(carved_df_data, erosion_threshold);
-                carved_vertices = getModelVertices(carved_df_data, 0, {1.0, 0.5, 0.0}, {0.7, 0.3, 0.0});
+                carved_vertices = getModelVertices(carved_df_data, 0, df_data, carved_layer, {1.0, 0.65, 0.0}, {1.0, 0.4, 0.0});
                 object_carved_layer.RenewObject(carved_vertices);
             }
             if(ImGui::Button("Reset carving effect")) {
@@ -483,6 +483,9 @@ int main()
         glm::mat4 view = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
         // create projection matrix
         glm::mat4 projection = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
+
+        view = camera.GetViewMatrix();
+        projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 10000.0f);
 
         // ---------- active shader for texture ----------
         glActiveTexture(GL_TEXTURE0);
@@ -605,9 +608,6 @@ int main()
 
         // ---------- active shader for color ----------
         color_shader.use();
-
-        view = camera.GetViewMatrix();
-        projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 10000.0f);
         color_shader.setMat4("view", view);
         color_shader.setMat4("projection", projection);
         color_shader.setVec3("lightPos", lightPos);
@@ -776,21 +776,27 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 }
 
 // 找模型表面體素，取得繪製體素的表面
-vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, glm::vec3 out_color, glm::vec3 in_color) {
-    vector<Vertex_c> vertex;
+// 並將表面外部跟最內部用不同顏色表示
+// 只有在模型鄰居等於再向內一層的那面需要畫成內部，其餘皆為外部
+// 應該有更簡潔判斷方法
+vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, VolumeData &base_df_data, int target_layer, glm::vec3 out_color, glm::vec3 in_color) {
+    vector<Vertex_c> vertices;
     auto start = steady_clock::now();
     glm::ivec3 resolution = df_data.resolution;
 
     // 建立一個 lambda 輔助函式，用來插入頂點並自動加上位移
     auto insertAndOffsetFace = [&](const vector<Vertex_c>& face_vertices, glm::ivec3 offset, glm::vec3 color) {
-        size_t old_size = vertex.size();
-        vertex.insert(vertex.end(), face_vertices.begin(), face_vertices.end());
-        size_t new_size = vertex.size();
+        size_t old_size = vertices.size();
+        vertices.insert(vertices.end(), face_vertices.begin(), face_vertices.end());
+        size_t new_size = vertices.size();
         
         for(size_t v = old_size; v < new_size; v++) {
-            vertex[v].position.x += offset.x;
-            vertex[v].position.y += offset.y;
-            vertex[v].position.z += offset.z;
+            vertices[v].position.x += offset.x;
+            vertices[v].position.y += offset.y;
+            vertices[v].position.z += offset.z;
+            vertices[v].color.r = color.r;
+            vertices[v].color.g = color.g;
+            vertices[v].color.b = color.b;
         }
     };
 
@@ -798,32 +804,32 @@ vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, glm::
         for(int j = 0; j < resolution[1]; j++) {
             for(int i = 0; i < resolution[0]; i++) {
                 if(df_data(i, j, k) == distance_value) { // 遇到model檢查鄰居是否是空氣
-                    if((i == 0) || (df_data(i - 1, j, k)) < distance_value) { // -x
+                    if((i == 0) || (df_data(i - 1, j, k)) != distance_value && base_df_data(i - 1, j, k) != target_layer) { // -x
                         insertAndOffsetFace(cube_face_vertices[0], {i, j, k}, out_color);
-                    } else if((df_data(i - 1, j, k)) > distance_value)
+                    } else if((df_data(i - 1, j, k)) > distance_value) // 為了避免等於距離值的情況成立而加 (也可以改成base_df_data(i - 1, j, k) == target_layer)
                         insertAndOffsetFace(cube_face_vertices[0], {i, j, k}, in_color);
 
-                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) < distance_value) { // +x
+                    if((i == df_data.resolution[0] - 1) || (df_data(i + 1, j, k)) != distance_value && base_df_data(i + 1, j, k) != target_layer) { // +x
                         insertAndOffsetFace(cube_face_vertices[1], {i, j, k}, out_color);
                     } else if((df_data(i + 1, j, k)) > distance_value)
                         insertAndOffsetFace(cube_face_vertices[1], {i, j, k}, in_color);
 
-                    if((j == 0) || (df_data(i, j - 1, k)) < distance_value) { // -y
+                    if((j == 0) || (df_data(i, j - 1, k)) != distance_value && base_df_data(i, j - 1, k) != target_layer) { // -y
                         insertAndOffsetFace(cube_face_vertices[2], {i, j, k}, out_color);
                     } else if((df_data(i, j - 1, k)) > distance_value)
                         insertAndOffsetFace(cube_face_vertices[2], {i, j, k}, in_color);
 
-                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) < distance_value) { // +y
+                    if((j == df_data.resolution[1] - 1) || (df_data(i, j + 1, k)) != distance_value && base_df_data(i, j + 1, k) != target_layer) { // +y
                         insertAndOffsetFace(cube_face_vertices[3], {i, j, k}, out_color);
                     } else if((df_data(i, j + 1, k)) > distance_value)
                         insertAndOffsetFace(cube_face_vertices[3], {i, j, k}, in_color);
 
-                    if((k == 0) || (df_data(i, j, k - 1)) < distance_value) { // -z
+                    if((k == 0) || (df_data(i, j, k - 1)) != distance_value && base_df_data(i, j, k - 1) != target_layer) { // -z
                         insertAndOffsetFace(cube_face_vertices[4], {i, j, k}, out_color);
                     } else if((df_data(i, j, k - 1)) > distance_value)
                         insertAndOffsetFace(cube_face_vertices[4], {i, j, k}, in_color);
 
-                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) < distance_value) { // +z
+                    if((k == df_data.resolution[2] - 1) || (df_data(i, j, k + 1)) != distance_value && base_df_data(i, j, k + 1) != target_layer) { // +z
                         insertAndOffsetFace(cube_face_vertices[5], {i, j, k}, out_color);
                     } else if((df_data(i, j, k + 1)) > distance_value)
                         insertAndOffsetFace(cube_face_vertices[5], {i, j, k}, in_color);
@@ -835,7 +841,7 @@ vector<Vertex_c> getModelVertices(VolumeData &df_data, int distance_value, glm::
     auto diff = duration<double>(end - start);
     cout<<"計算模型表面時間: "<<diff.count()<<" s\n"<<endl;
 
-    return vertex;
+    return vertices;
 }
 
 // 找在範圍內的模型每層距離值的體素，其中距離值為0即代表SOM訓練input
