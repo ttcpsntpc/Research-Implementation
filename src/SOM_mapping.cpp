@@ -121,8 +121,9 @@ glm::vec3 getTriangleProjectionPoint(glm::vec3 a, glm::vec3 b, glm::vec3 o, glm:
     return projp;
 }
 
-// 用來判斷和BMU一起構成三角形的其他兩點是否在邊界內，在邊界內就順便改成對應的索引
-bool isNodeIndexValid(SomData som_data, glm::ivec3 &A) {
+// 用來判斷和BMU一起構成三角形的其他兩點超出該面邊界後是否仍在神經網路裡面，在裡面就順便改成對應的索引
+// offset對邊界index取得的texcoord做修正，目前六面體有點麻煩先跳過
+bool isNodeIndexValid(SomData som_data, glm::ivec3 &A, glm::vec3 offset) {
     if(A.x < 0 || A.x > som_data.resolution[0] - 1 || A.y < 0 || A.y > som_data.resolution[1] - 1) { // x or y axis out of bound
         if(som_data.lattice_type == SQUARE) {
             return false;
@@ -130,22 +131,34 @@ bool isNodeIndexValid(SomData som_data, glm::ivec3 &A) {
         else if(som_data.lattice_type == CYLINDER) { 
             if(A.y < 0 || A.y > som_data.resolution[1] - 1) // y axis out of bound
                 return false;
-            if(A.x < 0) // 其實只會是 A.x == -1
+            if(A.x < 0) { // 其實只會是 A.x == -1
                 A.x += som_data.resolution[0] - 1; // 要位移 width - 1 才會到對應的node index
-            else if(A.x > som_data.resolution[0] - 1)
+                offset.x -= 1;    
+            }
+            else if(A.x > som_data.resolution[0] - 1) {
                 A.x -= som_data.resolution[0] - 1;
+                offset.x += 1;
+            }
         }
         else if(som_data.lattice_type == DONUT) {
-            if(A.x < 0)
+            if(A.x < 0) {
                 A.x += som_data.resolution[0] - 1;
-            else if(A.x > som_data.resolution[0] - 1)
+                offset.x -= 1;
+            }
+            else if(A.x > som_data.resolution[0] - 1) {
                 A.x -= som_data.resolution[0] - 1;
-            else if(A.y < 0) // 因為鄰居只會偏移x or y其中一個，所以不需要設成if
+                offset.x += 1;
+            }
+            else if(A.y < 0) { // 因為鄰居只會偏移x or y其中一個，所以不需要設成if
                 A.y += som_data.resolution[1] - 1;
-            else if(A.y > som_data.resolution[1] - 1)
+                offset.y -= 1;
+            }
+            else if(A.y > som_data.resolution[1] - 1) {
                 A.y -= som_data.resolution[1] - 1;
+                offset.y += 1;
+            }
         } 
-        else if(som_data.lattice_type == CUBE) { 
+        else if(som_data.lattice_type == CUBE) { // 六面體邊有點複雜先不做offset修正
             int w = som_data.resolution[0];
             int h = som_data.resolution[1];
             glm::ivec3 old_A = A;
@@ -246,11 +259,12 @@ glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
     double min_distance = numeric_limits<double>::max();
     glm::vec2 texcoord;
     for(int i = 0; i < 4; i++) {
+        glm::vec3 A_tex_offset, B_tex_offset; // 對邊界index取得的texcoord做修正
         // 三角形頂點index
         glm::ivec3 A = BMU + offset[i];
         glm::ivec3 B = BMU + offset[i + 1];
         // 超出範圍就跳過這個三角形
-        if(!isNodeIndexValid(som_data, A) || !isNodeIndexValid(som_data, B))
+        if(!isNodeIndexValid(som_data, A, A_tex_offset) || !isNodeIndexValid(som_data, B, B_tex_offset))
             continue;
         // 取得三角形位置
         glm::vec3 a = som_data(A.x, A.y, A.z);
@@ -269,8 +283,9 @@ glm::vec2 SOMMapping(glm::vec3 voxel, SomData &som_data) {
         float area_bo = glm::length(glm::cross(b - projp, o - projp));
         float area_oa = glm::length(glm::cross(o - projp, a - projp));
         float total_area = glm::length(glm::cross(a - o, b - o));
-        texcoord = som_data(BMU.x, BMU.y) * (area_ab / total_area) + som_data(A.x, A.y) * (area_bo / total_area) + som_data(B.x, B.y) * (area_oa / total_area);
+        texcoord = som_data(BMU.x, BMU.y) * (area_ab / total_area) + (som_data(A.x, A.y) + A_tex_offset) * (area_bo / total_area) + (som_data(B.x, B.y) + B_tex_offset) * (area_oa / total_area);
     }
+    texcoord = glm::mod(texcoord + 1.0f, 1.0f);
     return texcoord;
 }
 
